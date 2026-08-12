@@ -1,0 +1,8 @@
+{
+  "schema_version": "0.1",
+  "commands": [
+    { "op": "create_plate", "width": 100, "height": 50, "thickness": 10 },
+    { "op": "add_corner_holes", "diameter": 8, "margin": 10 },
+    { "op": "save_part", "path": "plate_100x50.SLDPRT" }
+  ]
+}

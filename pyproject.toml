@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swpilot"
+version = "0.1.0"
+description = "SW-Pilot: JSON-driven automation layer for SolidWorks with a CI-friendly mock backend"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.5",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+windows = ["pywin32>=306; sys_platform == 'win32'"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+swpilot = "swpilot.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["swpilot*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# win32com is dynamic COM dispatch: no stubs, everything is Any.
+module = ["swpilot.backends.solidworks.*"]
+disallow_untyped_calls = false
+disallow_any_explicit = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = ["win32com.*", "pythoncom"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -47,6 +47,9 @@ class CallSpec:
     * ``none`` — ignore the result
     * ``truthy`` — raise BackendError unless the result is truthy
     * ``non_null`` — raise BackendError if the result is None
+    * ``status_zero`` — raise BackendError unless the result is 0 (or
+      None): for Long-status COM methods like SaveAs3 where 0 means
+      success and nonzero carries error bits (swFileSaveError_e)
     """
 
     target: str
@@ -54,7 +57,7 @@ class CallSpec:
     args: tuple[object, ...] = ()
     kind: Literal["call", "set"] = "call"
     value: object = None
-    check: Literal["none", "truthy", "non_null"] = "none"
+    check: Literal["none", "truthy", "non_null", "status_zero"] = "none"
     note: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -78,11 +81,12 @@ class CallSpec:
 
 
 def get_default_part_template() -> CallSpec:
+    # check="none": an unset template legitimately returns ""; new_part in
+    # the COM backend detects that and raises its tailored guidance error.
     return CallSpec(
         target="App",
         method="GetUserPreferenceStringValue",
         args=(SW_DEFAULT_TEMPLATE_PART,),
-        check="truthy",
         note="resolve default part template path (swDefaultTemplatePart)",
     )
 
@@ -266,13 +270,24 @@ def cut_extrude_calls(through_all: bool, depth_mm: float | None) -> list[CallSpe
 
 
 def save_part_calls(path: str) -> list[CallSpec]:
+    """The call plan for ``save_part``.
+
+    SaveAs3 returns a Long status: 0 = success, nonzero = error bits
+    (swFileSaveError_e) — hence ``status_zero``, not ``truthy``.
+
+    Documented mock/real log divergence (like the new_part template
+    placeholder): the COM backend resolves ``path`` to an absolute path
+    before building this spec, because SolidWorks resolves relative
+    paths against its own process working directory, not the caller's.
+    The mock logs the path as written.
+    """
     return [
         CallSpec(
             target="Model",
             method="SaveAs3",
             args=(path, SW_SAVE_AS_CURRENT_VERSION, SW_SAVE_AS_OPTIONS_SILENT),
-            check="truthy",
-            note="save part (silent)",
+            check="status_zero",
+            note="save part (silent); returns swFileSaveError_e status, 0 = success",
         ),
     ]
 

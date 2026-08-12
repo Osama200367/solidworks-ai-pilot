@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -116,7 +117,40 @@ class TestRun:
         report = json.loads((tmp_path / "bad.json.report.json").read_text(encoding="utf-8"))
         assert report["success"] is False
 
-    def test_solidworks_backend_unavailable_off_windows(self, example: Path) -> None:
+    def test_solidworks_backend_unavailable_without_pywin32(
+        self, example: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A None entry in sys.modules makes the import raise ImportError,
+        # so this exercises the friendly-error path on every platform —
+        # including Windows machines where pywin32 IS installed.
+        monkeypatch.setitem(sys.modules, "swpilot.backends.solidworks.com_backend", None)
         result = runner.invoke(app, ["run", str(example), "--backend", "solidworks"])
         assert result.exit_code == 1
         assert "mock" in result.output  # points the user at --backend mock
+
+    def test_mock_warns_when_solidworks_options_given(self, example: Path) -> None:
+        result = runner.invoke(app, ["run", str(example), "--template", "X.prtdot"])
+        assert result.exit_code == 0
+        assert "ignored by the mock backend" in result.output
+
+    def test_non_utf8_file_exits_2(self, tmp_path: Path) -> None:
+        bad = tmp_path / "utf16.json"
+        bad.write_bytes(
+            json.dumps({"schema_version": "0.1", "commands": [{"op": "new_part"}]}).encode(
+                "utf-16"
+            )
+        )
+        result = runner.invoke(app, ["validate", str(bad)])
+        assert result.exit_code == 2
+        assert "not UTF-8" in result.output
+
+    def test_utf8_bom_file_accepted(self, tmp_path: Path) -> None:
+        good = tmp_path / "bom.json"
+        good.write_bytes(
+            b"\xef\xbb\xbf"
+            + json.dumps({"schema_version": "0.1", "commands": [{"op": "new_part"}]}).encode(
+                "utf-8"
+            )
+        )
+        result = runner.invoke(app, ["validate", str(good)])
+        assert result.exit_code == 0, result.output

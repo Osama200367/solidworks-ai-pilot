@@ -12,14 +12,23 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 SCHEMA_VERSION = "0.1"
 
-# A finite float; pydantic allows inf/nan by default, which we never want
-# for geometry.
-Finite = Annotated[float, Field(allow_inf_nan=False)]
-PositiveMm = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+
+def _reject_bool(v: object) -> object:
+    # bool is a subclass of int, so pydantic's lax mode would otherwise
+    # coerce JSON true/false to 1.0/0.0 mm — never a dimension the user meant.
+    if isinstance(v, bool):
+        raise ValueError("booleans are not valid numbers")
+    return v
+
+
+# A finite float; pydantic allows inf/nan (and bools) by default, which we
+# never want for geometry.
+Finite = Annotated[float, BeforeValidator(_reject_bool), Field(allow_inf_nan=False)]
+PositiveMm = Annotated[float, BeforeValidator(_reject_bool), Field(gt=0, allow_inf_nan=False)]
 Point2D = tuple[Finite, Finite]
 
 PlaneName = Literal["front", "top", "right"]
@@ -86,7 +95,10 @@ class CutExtrude(_Cmd):
     @model_validator(mode="before")
     @classmethod
     def _default_through_all(cls, data: object) -> object:
-        if isinstance(data, dict) and "depth" in data and "through_all" not in data:
+        # An explicit "depth": null means the same as omitting depth, so it
+        # must not suppress the through-all default — test the value, not
+        # key presence.
+        if isinstance(data, dict) and data.get("depth") is not None and "through_all" not in data:
             data = {**data, "through_all": False}
         return data
 

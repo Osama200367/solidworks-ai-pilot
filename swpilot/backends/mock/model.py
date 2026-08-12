@@ -31,10 +31,13 @@ class PartModel:
 
     ``footprints`` approximates the solid for cut validation: every
     entity of every boss sketch contributes its outline as material on
-    that sketch's plane. Cuts must land strictly inside some footprint
-    on the same plane. (v0.1 approximation: nested boss contours are
-    treated as solid material, and cross-plane containment is not
-    checked — the simulator emits a warning instead.)
+    that sketch's plane, and every through-all cut records the outline
+    it removed (``cut_footprints``). v0.1 approximations, all handled
+    with a warning rather than a false error: nested boss contours are
+    treated as solid material; cross-plane containment is not checked;
+    and the union of several merged same-plane bosses is not computed —
+    a cut spanning their seam cannot be proven inside material, so it
+    warns instead of failing.
     """
 
     sketches: list[Sketch] = field(default_factory=list)
@@ -54,6 +57,19 @@ class PartModel:
             shape
             for f in self.features
             if f.kind == "boss" and f.sketch.plane == plane
+            for shape in f.sketch.entities
+        ]
+
+    def cut_footprints(self, plane: PlaneName) -> list[tuple[str, Shape]]:
+        """(feature name, outline) removed by earlier through-all cuts.
+
+        Only through-all cuts count: a blind cut may leave material
+        beneath it, so nothing can be concluded about later cuts there.
+        """
+        return [
+            (f.name, shape)
+            for f in self.features
+            if f.kind == "cut" and f.through_all and f.sketch.plane == plane
             for shape in f.sketch.entities
         ]
 

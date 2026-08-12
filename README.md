@@ -138,6 +138,8 @@ tree; on the real backend it is read back from SolidWorks.
 Hole Wizard features, sketch constraints/dimensions as commands, assemblies,
 drawings, multiple parts per run, non-English SolidWorks installs (reference
 planes are selected by their English names), cross-plane cut containment
-validation, and the LLM layer itself. The integration point for the LLM is
+validation, footprint-union computation (a cut spanning the seam of several
+merged same-plane bosses produces a warning, not a verdict), and the LLM
+layer itself. The integration point for the LLM is
 frozen, though: it produces a `CommandFile` JSON document, and everything
 downstream already exists.

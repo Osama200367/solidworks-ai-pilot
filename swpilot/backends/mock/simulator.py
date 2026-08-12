@@ -9,9 +9,19 @@ what lets CI catch "commands parse but make no geometric sense".
 
 from __future__ import annotations
 
+import os
+
 from swpilot.backends import calls
 from swpilot.backends.base import Backend, BackendError
-from swpilot.backends.mock.geometry import Circle, Rect, Shape, contains, valid_contour_pair
+from swpilot.backends.mock.geometry import (
+    Circle,
+    Rect,
+    Shape,
+    contains,
+    covers,
+    disjoint,
+    valid_contour_pair,
+)
 from swpilot.backends.mock.model import Feature, PartModel, Sketch
 from swpilot.commands.schema import PlaneName
 
@@ -130,13 +140,45 @@ class MockBackend(Backend):
                 "material (cross-plane containment is not checked in v0.1)"
             )
             return
+        removed = model.cut_footprints(sketch.plane)
         for shape in sketch.entities:
-            if not any(contains(outer, shape) for outer in footprints):
+            # Non-strict on purpose: an exact duplicate of a previous hole
+            # (the likeliest LLM repetition error) must also be caught.
+            for cut_name, prev in removed:
+                if covers(prev, shape):
+                    raise BackendError(
+                        f"cut_extrude: contour {_describe(shape)} in {sketch.name} lies "
+                        f"entirely inside material already removed by {cut_name}; the "
+                        "cut would not intersect the model"
+                    )
+            if any(contains(outer, shape) for outer in footprints):
+                continue
+            touching = [outer for outer in footprints if not disjoint(outer, shape)]
+            if not touching:
+                raise BackendError(
+                    f"cut_extrude: contour {_describe(shape)} in {sketch.name} does not "
+                    "intersect any material footprint on this plane; the cut would "
+                    "miss the part entirely"
+                )
+            if len(touching) == 1:
+                # Only one footprint is involved, so whatever protrudes past
+                # its boundary is provably in empty space (or tangent to it).
                 raise BackendError(
                     f"cut_extrude: contour {_describe(shape)} in {sketch.name} is not "
                     "strictly inside the existing material footprint; the cut would "
-                    "miss the part or leave zero-thickness geometry at an edge"
+                    "cross or touch a material edge (zero-thickness geometry)"
                 )
+            # Touches several footprints but is strictly inside none: it may
+            # validly span the seam of merged same-plane bosses, or it may
+            # cross the union's outer edge — v0.1 models footprints
+            # individually and cannot compute their union to decide.
+            self._warn(
+                f"cut_extrude: contour {_describe(shape)} in {sketch.name} spans "
+                "several material footprints and is strictly inside none; if it "
+                "stays within the merged material this is fine, but if it crosses "
+                "the material edge SolidWorks will reject it (v0.1 cannot compute "
+                "footprint unions)"
+            )
 
     def save_part(self, path: str) -> None:
         model = self._require_part("save_part")
@@ -147,6 +189,12 @@ class MockBackend(Backend):
             )
         if not model.has_solid:
             self._warn("save_part: the part has no solid geometry yet")
+        if not os.path.isabs(path):
+            self._warn(
+                f"save_part: '{path}' is relative; on Windows the COM backend resolves "
+                "it against the swpilot working directory before calling SolidWorks, "
+                "so its call log will show the absolute path"
+            )
         self.call_log.extend(calls.save_part_calls(path))
         model.saved_to.append(path)
 

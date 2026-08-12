@@ -23,6 +23,7 @@ from swpilot.commands.schema import (
     PlaneName,
     PrimitiveCommand,
 )
+from swpilot.tolerances import EPS
 
 
 class MacroExpansionError(ValueError):
@@ -62,8 +63,10 @@ def expand_add_corner_holes(cmd: AddCornerHoles, ctx: MacroContext) -> list[Prim
             "the macro needs a plate envelope to place holes in. Use create_plate "
             "first, or place holes explicitly with draw_circle + cut_extrude."
         )
+    # Thresholds include the shared EPS so a macro-accepted file can never
+    # fail the simulator's strict-containment/disjointness checks later.
     r = cmd.diameter / 2.0
-    if cmd.margin <= r:
+    if cmd.margin <= r + EPS:
         raise MacroExpansionError(
             f"add_corner_holes: margin ({cmd.margin} mm) must exceed the hole radius "
             f"({r} mm), otherwise the hole crosses or touches the plate edge "
@@ -79,7 +82,7 @@ def expand_add_corner_holes(cmd: AddCornerHoles, ctx: MacroContext) -> list[Prim
     # circles must stay strictly disjoint (tangent circles are zero-thickness).
     for span, dim_name in ((plate.width, "width"), (plate.height, "height")):
         gap = span - 2.0 * cmd.margin
-        if gap <= cmd.diameter:
+        if gap <= cmd.diameter + EPS:
             raise MacroExpansionError(
                 f"add_corner_holes: holes would overlap or touch along the plate "
                 f"{dim_name} ({span} mm): centers are {gap} mm apart but the hole "

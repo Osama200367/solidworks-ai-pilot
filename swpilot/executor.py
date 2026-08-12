@@ -61,9 +61,10 @@ class RunReport:
     results: list[CommandResult]
     call_log: list[dict[str, object]]
     final_state: dict[str, object]
+    finalize_error: str | None = None
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        d: dict[str, object] = {
             "swpilot_version": swpilot.__version__,
             "schema_version": self.schema_version,
             "backend": self.backend,
@@ -74,6 +75,9 @@ class RunReport:
             "call_log": self.call_log,
             "final_state": self.final_state,
         }
+        if self.finalize_error is not None:
+            d["finalize_error"] = self.finalize_error
+        return d
 
 
 def _dispatch(backend: Backend, cmd: ExpandedCommand) -> None:
@@ -123,12 +127,27 @@ def execute(
             result.status = "error"
             result.error = str(exc)
             failed = True
+        except Exception as exc:
+            # A COM disconnect (pywintypes.com_error), an AttributeError from
+            # a dead dispatch object, or any backend bug must still produce a
+            # report attributing the failure — never a bare traceback.
+            result.status = "error"
+            result.error = f"{type(exc).__name__}: {exc}"
+            failed = True
         result.warnings = backend.pop_warnings()
         result.call_count = len(backend.call_log) - calls_before
         results.append(result)
 
+    finalize_error: str | None = None
     if not failed:
-        backend.finalize()
+        try:
+            backend.finalize()
+        except BackendError as exc:
+            failed = True
+            finalize_error = str(exc)
+        except Exception as exc:
+            failed = True
+            finalize_error = f"{type(exc).__name__}: {exc}"
         final_warnings = backend.pop_warnings()
         if final_warnings and results:
             results[-1].warnings.extend(final_warnings)
@@ -140,4 +159,5 @@ def execute(
         results=results,
         call_log=[spec.to_dict() for spec in backend.call_log],
         final_state=backend.state_summary(),
+        finalize_error=finalize_error,
     )

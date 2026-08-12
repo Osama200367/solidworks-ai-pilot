@@ -14,9 +14,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-# 1e-6 mm = 1 nm: far below manufacturing relevance, far above float noise
-# at the coordinate magnitudes we deal with (~1e2 mm).
-EPS = 1e-6
+from swpilot.tolerances import EPS
+
+__all__ = ["EPS", "Circle", "Rect", "Shape", "contains", "covers", "disjoint", "valid_contour_pair"]
 
 
 @dataclass(frozen=True)
@@ -89,6 +89,37 @@ def contains(outer: Shape, inner: Shape) -> bool:
     if isinstance(outer, Circle) and isinstance(inner, Rect):
         return all(
             _dist(outer.cx, outer.cy, px, py) < outer.r - EPS for px, py in _rect_corners(inner)
+        )
+    raise TypeError(f"unsupported shape pair: {type(outer)}, {type(inner)}")
+
+
+def covers(outer: Shape, inner: Shape) -> bool:
+    """True if ``inner`` lies inside ``outer``, touching allowed (± EPS).
+
+    The non-strict counterpart of :func:`contains`, used to detect a cut
+    landing entirely inside material a previous cut already removed —
+    there an exact duplicate (equal boundaries) must also count.
+    """
+    if isinstance(outer, Rect) and isinstance(inner, Circle):
+        return (
+            inner.cx - inner.r >= outer.xmin - EPS
+            and inner.cx + inner.r <= outer.xmax + EPS
+            and inner.cy - inner.r >= outer.ymin - EPS
+            and inner.cy + inner.r <= outer.ymax + EPS
+        )
+    if isinstance(outer, Circle) and isinstance(inner, Circle):
+        d = _dist(outer.cx, outer.cy, inner.cx, inner.cy)
+        return d + inner.r <= outer.r + EPS
+    if isinstance(outer, Rect) and isinstance(inner, Rect):
+        return (
+            inner.xmin >= outer.xmin - EPS
+            and inner.xmax <= outer.xmax + EPS
+            and inner.ymin >= outer.ymin - EPS
+            and inner.ymax <= outer.ymax + EPS
+        )
+    if isinstance(outer, Circle) and isinstance(inner, Rect):
+        return all(
+            _dist(outer.cx, outer.cy, px, py) <= outer.r + EPS for px, py in _rect_corners(inner)
         )
     raise TypeError(f"unsupported shape pair: {type(outer)}, {type(inner)}")
 

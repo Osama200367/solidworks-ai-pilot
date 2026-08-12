@@ -64,13 +64,17 @@ class SolidWorksBackend(Backend):
         return obj
 
     def _execute(self, spec: CallSpec) -> Any:
-        obj = self._resolve_target(spec.target)
         try:
+            # Resolution stays inside the try: a dead/disconnected COM object
+            # can fail on attribute access, not just on the final call.
+            obj = self._resolve_target(spec.target)
             if spec.kind == "set":
                 setattr(obj, spec.method, spec.value)
                 result = None
             else:
                 result = getattr(obj, spec.method)(*spec.args)
+        except BackendError:
+            raise
         except Exception as exc:
             raise BackendError(
                 f"COM call {spec.target}.{spec.method} failed: {exc} ({spec.note})"
@@ -85,6 +89,11 @@ class SolidWorksBackend(Backend):
                 f"COM call {spec.target}.{spec.method} returned nothing: {spec.note}. "
                 "SolidWorks likely rejected the operation; check the part for "
                 "error markers."
+            )
+        if spec.check == "status_zero" and result not in (0, None):
+            raise BackendError(
+                f"COM call {spec.target}.{spec.method} returned error status "
+                f"{result!r} (swFileSaveError_e bits): {spec.note}"
             )
         self.call_log.append(spec)
         return result

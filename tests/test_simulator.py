@@ -81,7 +81,7 @@ class TestCutContainment:
         make_plate(be)
         be.create_sketch("front")
         be.draw_circle((60, 0), 8)
-        with pytest.raises(BackendError, match="not strictly inside"):
+        with pytest.raises(BackendError, match="miss the part entirely"):
             be.cut_extrude(True, None)
 
     def test_hole_crossing_plate_edge_rejected(self, be: MockBackend) -> None:

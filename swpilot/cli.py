@@ -12,7 +12,7 @@ from typing import Annotated
 
 import typer
 
-from swpilot.backends.base import Backend
+from swpilot.backends.base import Backend, BackendError
 from swpilot.commands.loader import (
     CommandFileError,
     ExpandedCommand,
@@ -71,9 +71,16 @@ def expand(file: Annotated[Path, typer.Argument(help="Command file (JSON)")]) ->
 
 
 def _make_backend(
-    choice: BackendChoice, visible: bool, template: str | None
+    choice: BackendChoice, visible: bool | None, template: str | None
 ) -> Backend:
     if choice is BackendChoice.mock:
+        if template is not None or visible is not None:
+            typer.secho(
+                "warning: --template/--visible only affect the solidworks backend "
+                "and are ignored by the mock backend",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
         from swpilot.backends.mock.simulator import MockBackend
 
         return MockBackend()
@@ -88,7 +95,13 @@ def _make_backend(
             err=True,
         )
         raise typer.Exit(code=1) from exc
-    return SolidWorksBackend(visible=visible, part_template=template)
+    try:
+        return SolidWorksBackend(
+            visible=visible if visible is not None else True, part_template=template
+        )
+    except BackendError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command()
@@ -102,8 +115,12 @@ def run(
         typer.Option(help="Where to write the run report (default: <file>.report.json)"),
     ] = None,
     visible: Annotated[
-        bool, typer.Option(help="Show the SolidWorks window (solidworks backend)")
-    ] = True,
+        bool | None,
+        typer.Option(
+            "--visible/--no-visible",
+            help="Show the SolidWorks window (solidworks backend; default: visible)",
+        ),
+    ] = None,
     template: Annotated[
         str | None,
         typer.Option(help="Part template path (solidworks backend; overrides the default)"),
@@ -128,6 +145,10 @@ def run(
             typer.secho(f"  warning [{r.index}:{r.op}] {w}", fg=typer.colors.YELLOW)
         if r.status == "error":
             typer.secho(f"  error   [{r.index}:{r.op}] {r.error}", fg=typer.colors.RED, err=True)
+    if run_report.finalize_error:
+        typer.secho(
+            f"  error   [finalize] {run_report.finalize_error}", fg=typer.colors.RED, err=True
+        )
     typer.echo(f"report: {report_path}")
     if not run_report.success:
         raise typer.Exit(code=1)

@@ -58,7 +58,13 @@ def load_command_file(path: str | Path) -> CommandFile:
     """Read and validate a JSON command file."""
     p = Path(path)
     try:
-        raw = p.read_text(encoding="utf-8")
+        # utf-8-sig transparently strips a UTF-8 BOM (common from Windows
+        # editors) and is byte-identical for BOM-less files.
+        raw = p.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise CommandFileError(
+            f"cannot read {p}: file is not UTF-8 encoded ({exc}); re-save it as UTF-8"
+        ) from exc
     except OSError as exc:
         raise CommandFileError(f"cannot read {p}: {exc}") from exc
     try:

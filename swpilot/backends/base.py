@@ -1,9 +1,14 @@
 """Backend contract: one method per primitive command.
 
-Both backends implement identical signatures, so any test that passes
-against the mock exercises exactly the operation sequence the COM
-backend will receive. All dimensions arrive in millimeters; backends
-convert to meters at the COM boundary (see ``calls.py``).
+Both backends implement identical signatures against pre-resolved
+inputs: the executor's :class:`~swpilot.model.tracker.ModelTracker`
+validates every command and resolves selectors to concrete data (plane
+display names, feature names, edge pick coordinates) before any backend
+method runs. Backends therefore do no validation of their own — the mock
+logs the shared call plan, the COM backend executes the same plan.
+
+All dimensions arrive in millimeters and degrees; the shared call
+builders convert to meters/radians at the COM boundary.
 
 Sketch lifecycle note: there is deliberately no ``close_sketch``
 primitive. As in the SolidWorks API itself, ``extrude`` / ``cut_extrude``
@@ -15,7 +20,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from swpilot.backends.calls import CallSpec
-from swpilot.commands.schema import PlaneName
+
+Vec3 = tuple[float, float, float]
 
 
 class BackendError(RuntimeError):
@@ -23,7 +29,7 @@ class BackendError(RuntimeError):
 
 
 class Backend(ABC):
-    """Executes primitive commands against a model (real or simulated)."""
+    """Executes primitive commands against a model (real or logged)."""
 
     name: str = "abstract"
 
@@ -37,7 +43,13 @@ class Backend(ABC):
     def new_part(self) -> None: ...
 
     @abstractmethod
-    def create_sketch(self, plane: PlaneName) -> None: ...
+    def create_plane(self, name: str, base_display: str, distance: float) -> None: ...
+
+    @abstractmethod
+    def create_axis(self, axis: str, name: str) -> None: ...
+
+    @abstractmethod
+    def create_sketch(self, plane_display: str) -> None: ...
 
     @abstractmethod
     def draw_rectangle(self, center: tuple[float, float], width: float, height: float) -> None: ...
@@ -46,10 +58,53 @@ class Backend(ABC):
     def draw_circle(self, center: tuple[float, float], diameter: float) -> None: ...
 
     @abstractmethod
-    def extrude(self, depth: float) -> None: ...
+    def draw_slot(
+        self, start: tuple[float, float], end: tuple[float, float], width: float
+    ) -> None: ...
 
     @abstractmethod
-    def cut_extrude(self, through_all: bool, depth: float | None) -> None: ...
+    def extrude(self, depth: float, reverse: bool, name: str) -> None: ...
+
+    @abstractmethod
+    def cut_extrude(
+        self,
+        through_all: bool,
+        depth: float | None,
+        reverse: bool,
+        draft_angle: float | None,
+        name: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def fillet(self, edge_points: list[Vec3], radius: float, name: str) -> None: ...
+
+    @abstractmethod
+    def chamfer(
+        self, edge_points: list[Vec3], distance: float, angle: float, name: str
+    ) -> None: ...
+
+    @abstractmethod
+    def linear_pattern(
+        self,
+        feature_names: list[str],
+        axis_feature1: str,
+        flip1: bool,
+        spacing1: float,
+        count1: int,
+        dir2: tuple[str, bool, float, int] | None,
+        name: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def circular_pattern(
+        self,
+        feature_names: list[str],
+        axis_feature: str,
+        count: int,
+        total_angle: float,
+        equal_spacing: bool,
+        name: str,
+    ) -> None: ...
 
     @abstractmethod
     def save_part(self, path: str) -> None: ...
@@ -64,7 +119,7 @@ class Backend(ABC):
 
     @abstractmethod
     def state_summary(self) -> dict[str, object]:
-        """A JSON-serializable snapshot of the resulting model."""
+        """Backend-side model info (COM: read-back feature tree)."""
 
     def pop_warnings(self) -> list[str]:
         """Drain warnings accumulated since the last call (per-command)."""

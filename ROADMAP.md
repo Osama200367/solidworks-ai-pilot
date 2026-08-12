@@ -34,15 +34,18 @@ zero-thickness detection, material-footprint checks), pywin32 COM backend,
 fail-fast executor with attributed run reports, `run`/`validate`/`expand`
 CLI, CI with enforced COM isolation, 112 tests.
 
-### v0.2 — Richer part modeling ◀ current phase
+### v0.2 — Richer part modeling ◀ current phase (in review)
 
 New command families: fillets and chamfers; counterbore/countersink holes
-(Hole Wizard-style results built pragmatically from composed cuts); linear
-and circular feature patterns; slots; sketching on arbitrary planar faces
-and offset reference planes. The enabling design problem — how JSON refers
-to specific edges and faces without COM handles — is solved by declarative
-selectors resolved against a shared geometric model tracker (see the v0.2
-design discussion in the PR for this phase).
+(Hole Wizard-style results built pragmatically from composed cuts, with
+nominal metric fastener presets); linear and circular feature patterns
+(real SolidWorks pattern features over auto-created reference axes); slots;
+sketching on planar faces and offset reference planes. The enabling design —
+how JSON refers to specific edges and faces without COM handles — is
+declarative selectors resolved by a shared geometric model tracker (the
+"digital twin") into coordinate-based selection, with the twin promoted out
+of the mock so it validates every backend, including the real one, before
+any COM call.
 
 ### v0.3 — Assemblies
 

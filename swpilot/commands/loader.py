@@ -1,4 +1,10 @@
-"""Load, validate and macro-expand SW-Pilot command files."""
+"""Load, validate and macro-expand SW-Pilot command files.
+
+Expansion runs a :class:`ModelTracker` pass over every emitted
+primitive, so both macro errors *and* geometric errors (bad selectors,
+cuts outside material, unknown planes) surface at validation time —
+``swpilot validate`` needs no backend to catch them.
+"""
 
 from __future__ import annotations
 
@@ -11,11 +17,17 @@ from pydantic import ValidationError
 from swpilot.commands import macros
 from swpilot.commands.schema import (
     AddCornerHoles,
+    CircularPattern,
     Command,
     CommandFile,
     CreatePlate,
+    CreateSketch,
+    Hole,
+    LinearPattern,
     PrimitiveCommand,
 )
+from swpilot.model.apply import apply_to_tracker
+from swpilot.model.tracker import ModelError, ModelTracker
 
 
 class CommandFileError(ValueError):
@@ -74,29 +86,50 @@ def load_command_file(path: str | Path) -> CommandFile:
     return parse_command_data(data)
 
 
+def _expand_one(cmd: Command, tracker: ModelTracker) -> list[object] | None:
+    """Expansion for one source command; None means pass through as-is."""
+    if isinstance(cmd, CreatePlate):
+        return macros.expand_create_plate(cmd, tracker)
+    if isinstance(cmd, AddCornerHoles):
+        return macros.expand_add_corner_holes(cmd, tracker)
+    if isinstance(cmd, Hole):
+        return macros.expand_hole(cmd, tracker)
+    if isinstance(cmd, CreateSketch) and cmd.on is not None:
+        return macros.expand_sketch_on_face(cmd, tracker)
+    if isinstance(cmd, LinearPattern | CircularPattern):
+        return macros.expand_pattern_axes(cmd, tracker)
+    return None
+
+
 def expand_commands(commands: list[Command]) -> list[ExpandedCommand]:
     """Expand macros into primitives, preserving provenance.
 
-    Raises :class:`CommandFileError` when a macro is invalid in context
-    (e.g. ``add_corner_holes`` without a plate, or holes that cannot fit).
+    Every emitted primitive is validated against a tracker as expansion
+    proceeds, so macro errors and geometric errors alike raise
+    :class:`CommandFileError` naming the offending source command.
     """
-    ctx = macros.MacroContext()
+    tracker = ModelTracker()
     out: list[ExpandedCommand] = []
     for i, cmd in enumerate(commands):
         try:
-            if isinstance(cmd, CreatePlate):
-                expansion = macros.expand_create_plate(cmd, ctx)
-            elif isinstance(cmd, AddCornerHoles):
-                expansion = macros.expand_add_corner_holes(cmd, ctx)
-            else:
-                out.append(ExpandedCommand(command=cmd, source_index=i, source_op=cmd.op))
-                continue
+            expansion = _expand_one(cmd, tracker)
         except macros.MacroExpansionError as exc:
             raise CommandFileError(f"commands[{i}] ({cmd.op}): {exc}") from exc
-        out.extend(
-            ExpandedCommand(command=prim, source_index=i, source_op=cmd.op, expansion_step=step)
-            for step, prim in enumerate(expansion)
-        )
+        primitives: list[object] = [cmd] if expansion is None else expansion
+        was_macro = expansion is not None
+        for step, prim in enumerate(primitives):
+            try:
+                apply_to_tracker(tracker, prim)  # type: ignore[arg-type]
+            except ModelError as exc:
+                raise CommandFileError(f"commands[{i}] ({cmd.op}): {exc}") from exc
+            out.append(
+                ExpandedCommand(
+                    command=prim,  # type: ignore[arg-type]
+                    source_index=i,
+                    source_op=cmd.op,
+                    expansion_step=step if was_macro else None,
+                )
+            )
     return out
 
 

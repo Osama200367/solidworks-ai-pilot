@@ -61,7 +61,28 @@ class TestValidate:
         )
         result = runner.invoke(app, ["validate", str(bad)])
         assert result.exit_code == 2
-        assert "create_plate" in result.output
+        assert "no boss feature" in result.output
+
+    def test_geometric_error_caught_at_validate_time(self, tmp_path: Path) -> None:
+        # v0.2: validate runs the twin, so cuts outside material fail here.
+        bad = tmp_path / "bad.json"
+        bad.write_text(
+            json.dumps(
+                {
+                    "schema_version": "0.2",
+                    "commands": [
+                        {"op": "create_plate", "width": 100, "height": 50, "thickness": 10},
+                        {"op": "create_sketch"},
+                        {"op": "draw_circle", "center": [80, 0], "diameter": 8},
+                        {"op": "cut_extrude"},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["validate", str(bad)])
+        assert result.exit_code == 2
+        assert "miss the part entirely" in result.output
 
 
 class TestExpand:
@@ -95,7 +116,10 @@ class TestRun:
         assert result.exit_code == 0
         assert report_path.exists()
 
-    def test_run_execution_failure_exit_code(self, tmp_path: Path) -> None:
+    def test_run_invalid_geometry_fails_at_validation(self, tmp_path: Path) -> None:
+        # v0.2: the loader's tracker pass catches geometric errors before a
+        # backend even exists, so `run` on such a file exits 2 (invalid
+        # file) and writes no report.
         bad = tmp_path / "bad.json"
         bad.write_text(
             json.dumps(
@@ -112,10 +136,9 @@ class TestRun:
             encoding="utf-8",
         )
         result = runner.invoke(app, ["run", str(bad)])
-        assert result.exit_code == 1
-        # the report is still written for failed runs
-        report = json.loads((tmp_path / "bad.json.report.json").read_text(encoding="utf-8"))
-        assert report["success"] is False
+        assert result.exit_code == 2
+        assert "no solid material" in result.output
+        assert not (tmp_path / "bad.json.report.json").exists()
 
     def test_solidworks_backend_unavailable_without_pywin32(
         self, example: Path, monkeypatch: pytest.MonkeyPatch

@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.1",
+  "commands": [
+    { "op": "new_part" },
+    { "op": "create_sketch", "plane": "front" },
+    { "op": "draw_rectangle", "center": [0, 0], "width": 100, "height": 50 },
+    { "op": "extrude", "depth": 10 },
+    { "op": "create_sketch", "plane": "front" },
+    { "op": "draw_circle", "center": [-40, -15], "diameter": 8 },
+    { "op": "draw_circle", "center": [40, -15], "diameter": 8 },
+    { "op": "draw_circle", "center": [-40, 15], "diameter": 8 },
+    { "op": "draw_circle", "center": [40, 15], "diameter": 8 },
+    { "op": "cut_extrude", "through_all": true }
+  ]
+}

@@ -74,7 +74,7 @@ every dimension attachment into exact sheet coordinates for selection.
 Acceptance cases: the v0.2 bracket sheet and a hollow flange with a
 section view proving internal bore dimensioning.
 
-### v0.5 — The curves engine ◀ current phase
+### v0.5 — The curves engine ✅ (merged)
 
 True swept and curved geometry the prismatic engine can't make.
 `involute_spur_gear` (the flagship: a real parametric involute flank +
@@ -94,11 +94,24 @@ Acceptance cases: a module-2 20-tooth gear meshing-checked against a
 module-2 40-tooth mate, and the v-pulley rebuilt with revolve to prove the
 approximation→real upgrade.
 
-### v1.0 — LLM natural-language layer
+### v1.0 — LLM natural-language layer ◀ current phase
 
 Natural language → `CommandFile` JSON, on top of the full vocabulary of
-v0.1–v0.5. `swpilot/llm/` fills in: prompt/tool schemas derived from the
-pydantic models, iterative repair using validator and simulator errors as
-feedback (the same errors CI uses), and a conversational CLI. Everything
-downstream — validation, expansion, simulation, execution, reporting —
-already exists and is identical for LLM-authored and hand-written files.
+v0.1–v0.5, in Arabic or English. `swpilot/llm/` delivers it model-
+agnostically: a **prompt bundle** whose command vocabulary is auto-generated
+by walking the pydantic `Command` union (so the reference can never drift
+from the schema — a CI test asserts every op is documented), few-shot
+examples drawn from real validated command files, and curated guidance
+(millimetres, English keys, prefer macros). Two modes share one
+validate-then-repair core: **copy-paste** (the default — bundle out to any
+free chat, JSON back through `ai-apply`, no API key) and **api** (any
+OpenAI-compatible endpoint). Extraction is defensive — it pulls the
+CommandFile out of prose, ```json fences, or stray braces — and on a
+validation failure it builds a repair prompt from the real pydantic errors
+(the same errors CI uses); API mode auto-retries once, copy-paste mode hands
+the prompt to the user. **Safety gate:** the LLM never touches COM; only the
+deterministic engine validates, and the parsed command list is shown for
+confirmation before any execution. Everything downstream — validation,
+expansion, simulation, execution, reporting — is identical for LLM-authored
+and hand-written files. Acceptance cases: the Arabic gear request above runs
+1/1 through the mock, plus an assembly request and a plain plate.

@@ -4,26 +4,54 @@ AI-powered automation layer for SolidWorks. A user describes a part in plain
 language, an LLM translates that into structured JSON commands, and SW-Pilot
 executes them in SolidWorks through its COM API.
 
-**Current scope (v0.5)**: the JSON-command half of that pipeline, through
-a **curves engine** for true swept/curved geometry — real involute spur
-and internal ring gears, ISO-606 sprockets, a generic revolve (solids of
-revolution), and cosmetic helical threads — on top of parts, assemblies,
-and dimensioned 2D drawings. A pure-math curve layer generates the exact
-gear/sprocket invariants the digital twin verifies *and* the spline
-profile the COM backend draws; curved features that can't be reduced to a
-box degrade gracefully to a bounding envelope. Everything except the final
-COM hop runs and is tested without SolidWorks — in CI, in the cloud,
-anywhere. See [ROADMAP.md](ROADMAP.md) for the phase plan; the LLM
-translation layer comes last and will simply emit the same JSON.
+**Current scope (v1.0)**: the whole pipeline. A **natural-language layer**
+turns a plain-language part/assembly description — Arabic or English — into
+the same structured JSON the engine already validates, expands, and
+executes. It is deliberately model-agnostic: the primary **copy-paste mode**
+generates a self-contained prompt bundle you paste into *any* free AI chat
+(no API key), then pastes the reply back for validation; an optional **API
+mode** calls any OpenAI-compatible endpoint directly. Underneath sits the
+JSON-command engine built over v0.1–v0.5: parts, assemblies, dimensioned 2D
+drawings, and a **curves engine** for true swept/curved geometry — real
+involute spur and internal ring gears, ISO-606 sprockets, a generic revolve,
+and cosmetic helical threads. A pure-math curve layer generates the exact
+gear/sprocket invariants the digital twin verifies *and* the spline profile
+the COM backend draws; curved features that can't be reduced to a box
+degrade gracefully to a bounding envelope. Everything except the final COM
+hop — including the LLM validate/repair loop — runs and is tested without
+SolidWorks, in CI, in the cloud, anywhere. See [ROADMAP.md](ROADMAP.md).
 
 ```
-natural language ──▶ [LLM layer, v0.2] ──▶ commands.json ──▶ swpilot run
+"a gear m2 z20…"  ──▶  swpilot ai  ──▶  prompt bundle ──▶ any free AI chat
+                                                                │  (JSON)
+                                              swpilot ai-apply ─┘
+                                                     │ validate + one repair
+                                                     ▼
+                                              commands.json ──▶ swpilot run
                                                                 │
                                               ┌─────────────────┴──────────────┐
                                               ▼                                ▼
                                       --backend mock                --backend solidworks
                                     (any OS, CI-safe)             (Windows + SolidWorks)
 ```
+
+## Plain language → a part (v1.0)
+
+No API key needed — works with any free AI chat:
+
+```bash
+swpilot ai "a 100x50x10 plate with 4 corner holes" --out prompt.txt
+# paste prompt.txt into any AI chat, save its reply as reply.txt
+swpilot ai-apply reply.txt          # extracts + validates + runs (mock)
+```
+
+Arabic works too — `swpilot ai "بدي ترس m2 بـ20 سن مع تجويف 16 وخابور"`
+yields a valid `involute_spur_gear` command file. If the AI's JSON doesn't
+validate, `ai-apply` prints a ready-to-paste repair prompt built from the
+real validator errors instead of executing anything. With an
+OpenAI-compatible endpoint configured (`SWPILOT_LLM_MODEL`,
+`SWPILOT_LLM_BASE_URL`, `SWPILOT_LLM_API_KEY`), `swpilot ai "…" --mode api`
+does the round-trip (with one auto-repair) for you.
 
 ## Quick start (no SolidWorks needed)
 

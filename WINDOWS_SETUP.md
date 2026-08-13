@@ -57,11 +57,29 @@ Useful flags: `--no-visible` runs SolidWorks without showing the window;
 - **Dialogs blocking automation** — close open documents and dismiss modal
   dialogs; COM calls silently fail or hang while a modal dialog is up.
 - **Version notes** — the COM calls used (`FeatureExtrusion2`, `FeatureCut3`,
-  `SelectByID2`, `CreateCenterRectangle`, `CreateCircleByRadius`, `SaveAs3`)
-  exist unchanged across SolidWorks 2022–2025. SW-Pilot deliberately avoids
-  version-specific type libraries (`EnsureDispatch`); it uses late-bound
-  dynamic dispatch with hardcoded constants so one install works against any
-  supported SolidWorks version.
+  `FeatureFillet3`, `InsertFeatureChamfer`, `FeatureLinearPattern4`,
+  `FeatureCircularPattern4`, `InsertRefPlane`, `InsertAxis2`,
+  `CreateSketchSlot`, `SelectByID2`, `CreateCenterRectangle`,
+  `CreateCircleByRadius`, `SaveAs3`) exist across SolidWorks 2022–2025.
+  SW-Pilot deliberately avoids version-specific type libraries
+  (`EnsureDispatch`); it uses late-bound dynamic dispatch with hardcoded
+  constants so one install works against any supported SolidWorks version.
+
+## v0.2 smoke-test checklist (things designed for verification)
+
+1. **Edge pick coordinates** — run `examples/bracket.json`: the fillet must
+   land on the four plate corners. If it selects wrong edges, the sketch-axis
+   conventions in `swpilot/model/planes.py` need adjusting (they are pinned
+   by `tests/test_planes.py`).
+2. **Negative-offset reference planes** — `create_plane` with a negative
+   distance uses `swRefPlaneReferenceConstraint_OptionFlip` (256); verify
+   the plane lands on the correct side of its base.
+3. **Feature renaming** — after a run, the feature tree names should match
+   the run report exactly (`Boss-Extrude1`, `Cut-Extrude1`, `SWPilot_Plane1`,
+   `SWPilot_Axis_Z`, ...).
+4. **Countersink cone** — check the drafted cut produces the expected major
+   diameter at the surface (the draft direction flag `Ddir1` is the thing to
+   flip if the cone opens the wrong way).
 
 ## What runs where
 

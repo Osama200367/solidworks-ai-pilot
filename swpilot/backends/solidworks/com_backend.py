@@ -2,7 +2,9 @@
 
 Executes the exact :class:`CallSpec` sequences produced by
 ``swpilot.backends.calls`` — the same specs the mock backend logs — so a
-call log validated in CI is precisely what runs here.
+call log validated in CI is precisely what runs here. The executor's
+shared ModelTracker has already validated every command and resolved
+selections before any method here is called.
 
 Cannot be executed in CI by design; smoke-test on Windows per
 WINDOWS_SETUP.md.
@@ -14,9 +16,8 @@ import os
 from typing import Any
 
 from swpilot.backends import calls
-from swpilot.backends.base import Backend, BackendError
+from swpilot.backends.base import Backend, BackendError, Vec3
 from swpilot.backends.calls import CallSpec
-from swpilot.commands.schema import PlaneName
 
 try:
     import win32com.client  # noqa: F401
@@ -44,6 +45,7 @@ class SolidWorksBackend(Backend):
             ) from exc
         self._app.Visible = visible
         self._model: Any = None
+        self._last_feature: Any = None
         self._part_template = part_template or os.environ.get("SWPILOT_PART_TEMPLATE")
 
     # -- CallSpec execution --------------------------------------------
@@ -56,6 +58,16 @@ class SolidWorksBackend(Backend):
             if self._model is None:
                 raise BackendError(f"internal error: no open model for call target {target!r}")
             obj = self._model
+        elif root_name == "LastFeature":
+            obj = self._last_feature
+            if obj is None:
+                # Fallback for creators that return a bool (e.g. InsertAxis2):
+                # the newest feature is at position 0 from the tree's end.
+                obj = self._model.FeatureByPositionReverse(0)
+            if obj is None:
+                raise BackendError(
+                    "internal error: no feature available to rename (LastFeature)"
+                )
         else:
             raise BackendError(f"internal error: unknown call target root {root_name!r}")
         if rest:
@@ -95,6 +107,10 @@ class SolidWorksBackend(Backend):
                 f"COM call {spec.target}.{spec.method} returned error status "
                 f"{result!r} (swFileSaveError_e bits): {spec.note}"
             )
+        if spec.remember:
+            self._last_feature = result
+        if spec.target == "LastFeature":
+            self._last_feature = None
         self.call_log.append(spec)
         return result
 
@@ -106,7 +122,7 @@ class SolidWorksBackend(Backend):
 
     def new_part(self) -> None:
         if self._model is not None:
-            raise BackendError("new_part: a part is already open; v0.1 supports one part per run")
+            raise BackendError("new_part: a part is already open; one part per run")
         template = self._part_template
         if template is None:
             template = self._execute(calls.get_default_part_template())
@@ -118,9 +134,17 @@ class SolidWorksBackend(Backend):
                 )
         self._model = self._execute(calls.new_document(str(template)))
 
-    def create_sketch(self, plane: PlaneName) -> None:
+    def create_plane(self, name: str, base_display: str, distance: float) -> None:
+        self._require_model("create_plane")
+        self._execute_all(calls.create_plane_calls(name, base_display, distance))
+
+    def create_axis(self, axis: str, name: str) -> None:
+        self._require_model("create_axis")
+        self._execute_all(calls.create_axis_calls(axis, name))
+
+    def create_sketch(self, plane_display: str) -> None:
         self._require_model("create_sketch")
-        self._execute_all(calls.create_sketch_calls(plane))
+        self._execute_all(calls.create_sketch_calls(plane_display))
 
     def draw_rectangle(self, center: tuple[float, float], width: float, height: float) -> None:
         self._require_model("draw_rectangle")
@@ -130,13 +154,71 @@ class SolidWorksBackend(Backend):
         self._require_model("draw_circle")
         self._execute_all(calls.draw_circle_calls(center, diameter))
 
-    def extrude(self, depth: float) -> None:
-        self._require_model("extrude")
-        self._execute_all(calls.extrude_calls(depth))
+    def draw_slot(
+        self, start: tuple[float, float], end: tuple[float, float], width: float
+    ) -> None:
+        self._require_model("draw_slot")
+        self._execute_all(calls.draw_slot_calls(start, end, width))
 
-    def cut_extrude(self, through_all: bool, depth: float | None) -> None:
+    def extrude(self, depth: float, reverse: bool, name: str) -> None:
+        self._require_model("extrude")
+        self._execute_all(calls.extrude_calls(depth, reverse, name))
+
+    def cut_extrude(
+        self,
+        through_all: bool,
+        depth: float | None,
+        reverse: bool,
+        draft_angle: float | None,
+        name: str,
+    ) -> None:
         self._require_model("cut_extrude")
-        self._execute_all(calls.cut_extrude_calls(through_all, depth))
+        self._execute_all(
+            calls.cut_extrude_calls(through_all, depth, reverse, draft_angle, name)
+        )
+
+    def fillet(self, edge_points: list[Vec3], radius: float, name: str) -> None:
+        self._require_model("fillet")
+        self._execute_all(calls.fillet_calls(edge_points, radius, name))
+
+    def chamfer(
+        self, edge_points: list[Vec3], distance: float, angle: float, name: str
+    ) -> None:
+        self._require_model("chamfer")
+        self._execute_all(calls.chamfer_calls(edge_points, distance, angle, name))
+
+    def linear_pattern(
+        self,
+        feature_names: list[str],
+        axis_feature1: str,
+        flip1: bool,
+        spacing1: float,
+        count1: int,
+        dir2: tuple[str, bool, float, int] | None,
+        name: str,
+    ) -> None:
+        self._require_model("linear_pattern")
+        self._execute_all(
+            calls.linear_pattern_calls(
+                feature_names, axis_feature1, flip1, spacing1, count1, dir2, name
+            )
+        )
+
+    def circular_pattern(
+        self,
+        feature_names: list[str],
+        axis_feature: str,
+        count: int,
+        total_angle: float,
+        equal_spacing: bool,
+        name: str,
+    ) -> None:
+        self._require_model("circular_pattern")
+        self._execute_all(
+            calls.circular_pattern_calls(
+                feature_names, axis_feature, count, total_angle, equal_spacing, name
+            )
+        )
 
     def save_part(self, path: str) -> None:
         self._require_model("save_part")
@@ -153,6 +235,7 @@ class SolidWorksBackend(Backend):
         # Drop COM references; leave the SolidWorks application running —
         # killing an app the user may have had open would be hostile.
         self._model = None
+        self._last_feature = None
         self._app = None
 
     def state_summary(self) -> dict[str, object]:

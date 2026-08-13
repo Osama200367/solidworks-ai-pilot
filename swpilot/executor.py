@@ -17,6 +17,7 @@ import swpilot
 from swpilot.backends.base import Backend, BackendError
 from swpilot.commands.loader import ExpandedCommand
 from swpilot.commands.schema import (
+    ActivateDocument,
     Chamfer,
     CircularPattern,
     CreateAxis,
@@ -28,12 +29,17 @@ from swpilot.commands.schema import (
     DrawSlot,
     Extrude,
     Fillet,
+    InsertComponent,
     LinearPattern,
+    Mate,
+    NewAssembly,
     NewPart,
+    SaveAssembly,
     SavePart,
 )
-from swpilot.model.apply import ApplyResult, apply_to_tracker
-from swpilot.model.tracker import AXIS_FEATURE_NAMES, ModelError, ModelTracker
+from swpilot.model.apply import ApplyResult, apply_to_session
+from swpilot.model.session import SessionTracker
+from swpilot.model.tracker import AXIS_FEATURE_NAMES, ModelError
 
 
 @dataclass
@@ -107,8 +113,38 @@ def _dir_axis(direction: str) -> tuple[str, bool]:
 def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
     c = ec.command
     if isinstance(c, NewPart):
-        backend.new_part()
-    elif isinstance(c, CreatePlane):
+        assert res.document is not None
+        backend.new_part(res.document)
+        backend.mark_active(res.document)
+        return
+    if isinstance(c, NewAssembly):
+        assert res.document is not None
+        backend.new_assembly(res.document)
+        backend.mark_active(res.document)
+        return
+    # Everything else operates on the twin's active document — switch the
+    # backend there first (no-op when already active).
+    assert res.document is not None and res.doc_kind is not None
+    backend.ensure_active(res.document, res.doc_kind)
+    if isinstance(c, ActivateDocument):
+        return  # ensure_active above did the work (or nothing, if current)
+    if isinstance(c, InsertComponent):
+        assert res.component is not None
+        comp = res.component
+        assert comp.path is not None
+        backend.insert_component(
+            comp.path, comp.name, comp.translation, comp.rotation_row_major, comp.fixed
+        )
+        return
+    if isinstance(c, Mate):
+        assert res.mate is not None
+        m = res.mate
+        backend.add_mate(m.mate_type, m.pick_a, m.pick_b, m.value, m.name)
+        return
+    if isinstance(c, SaveAssembly):
+        backend.save_assembly(c.path)
+        return
+    if isinstance(c, CreatePlane):
         assert res.plane_display is not None
         backend.create_plane(c.name, res.plane_display, c.distance)
     elif isinstance(c, CreateAxis):
@@ -164,9 +200,9 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
 def execute(
     expanded: list[ExpandedCommand],
     backend: Backend,
-    schema_version: str = "0.2",
+    schema_version: str = "0.3",
 ) -> RunReport:
-    tracker = ModelTracker()
+    session = SessionTracker()
     results: list[CommandResult] = []
     failed = False
     for i, ec in enumerate(expanded):
@@ -184,7 +220,7 @@ def execute(
             continue
         calls_before = len(backend.call_log)
         try:
-            res = apply_to_tracker(tracker, ec.command)
+            res = apply_to_session(session, ec.command)
             result.warnings.extend(res.warnings)
             result.resolved = res.resolved_dict()
             _dispatch(backend, ec, res)
@@ -199,16 +235,16 @@ def execute(
             result.status = "error"
             result.error = f"{type(exc).__name__}: {exc}"
             failed = True
-        # Tracker warnings emitted before a mid-command error would
-        # otherwise strand in the tracker and leak onto the next command;
-        # on the success path apply_to_tracker already drained them.
-        result.warnings.extend(tracker.pop_warnings() + backend.pop_warnings())
+        # Twin warnings emitted before a mid-command error would otherwise
+        # strand in the session and leak onto the next command; on the
+        # success path apply_to_session already drained them.
+        result.warnings.extend(session.pop_warnings() + backend.pop_warnings())
         result.call_count = len(backend.call_log) - calls_before
         results.append(result)
 
     finalize_error: str | None = None
     if not failed:
-        tracker.finalize()
+        session.finalize()
         try:
             backend.finalize()
         except (ModelError, BackendError) as exc:
@@ -217,7 +253,7 @@ def execute(
         except Exception as exc:
             failed = True
             finalize_error = f"{type(exc).__name__}: {exc}"
-        final_warnings = tracker.pop_warnings() + backend.pop_warnings()
+        final_warnings = session.pop_warnings() + backend.pop_warnings()
         if final_warnings and results:
             results[-1].warnings.extend(final_warnings)
 
@@ -227,7 +263,7 @@ def execute(
         success=not failed,
         results=results,
         call_log=[spec.to_dict() for spec in backend.call_log],
-        final_state=tracker.summary(),
+        final_state=session.summary(),
         backend_state=backend.state_summary(),
         finalize_error=finalize_error,
     )

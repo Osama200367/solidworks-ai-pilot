@@ -61,7 +61,7 @@ class TestValidate:
         )
         result = runner.invoke(app, ["validate", str(bad)])
         assert result.exit_code == 2
-        assert "no boss feature" in result.output
+        assert "no document is open" in result.output
 
     def test_geometric_error_caught_at_validate_time(self, tmp_path: Path) -> None:
         # v0.2: validate runs the twin, so cuts outside material fail here.

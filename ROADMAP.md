@@ -34,7 +34,7 @@ zero-thickness detection, material-footprint checks), pywin32 COM backend,
 fail-fast executor with attributed run reports, `run`/`validate`/`expand`
 CLI, CI with enforced COM isolation, 112 tests.
 
-### v0.2 — Richer part modeling ◀ current phase (in review)
+### v0.2 — Richer part modeling ✅ (merged)
 
 New command families: fillets and chamfers; counterbore/countersink holes
 (Hole Wizard-style results built pragmatically from composed cuts, with
@@ -47,12 +47,17 @@ declarative selectors resolved by a shared geometric model tracker (the
 of the mock so it validates every backend, including the real one, before
 any COM call.
 
-### v0.3 — Assemblies
+### v0.3 — Assemblies ◀ current phase
 
-Multi-part sessions: insert components from saved parts, position them, and
-constrain them with mates (coincident, concentric, distance, angle …).
-Component/mate command families; the model tracker grows an assembly tree;
-mock validation catches over-constraint and impossible mates cheaply.
+Multi-part sessions in one flat command stream (named documents, active-
+document routing): insert components from same-run parts or external files
+(declared envelopes), position them with translations + 90°-step rotations,
+and constrain them with coincident/concentric/distance/parallel mates. The
+twin gains an axis-aligned snap-solver: mates pin coordinates exactly,
+over-constraint (including mismatched hole patterns) fails at validate
+time, redundancy and under-constraint warn, and the bolt_circle macro
+builds fastener sets straight from hole features. Acceptance case: a
+manufacturable base + cover + M8 SHCS bolt circle saved as .SLDASM.
 
 ### v0.4 — Engineering drawings
 

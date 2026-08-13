@@ -4,12 +4,15 @@ AI-powered automation layer for SolidWorks. A user describes a part in plain
 language, an LLM translates that into structured JSON commands, and SW-Pilot
 executes them in SolidWorks through its COM API.
 
-**Current scope (v0.2)**: the JSON-command half of that pipeline, now with
-rich part modeling — fillets, chamfers, counterbore/countersink holes,
-slots, feature patterns, and sketching on faces/reference planes. Everything
-except the final COM hop runs and is tested without SolidWorks — in CI, in
-the cloud, anywhere. See [ROADMAP.md](ROADMAP.md) for the phase plan; the
-LLM translation layer comes later and will simply emit the same JSON.
+**Current scope (v0.3)**: the JSON-command half of that pipeline, through
+multi-part **assemblies** — one command file builds several parts, inserts
+them as components (translate + 90°-step rotations), mates them
+(coincident/concentric/distance/parallel) with an exact axis-aligned mate
+solver that detects over/under-constrained states, and saves `.SLDASM`.
+Everything except the final COM hop runs and is tested without SolidWorks —
+in CI, in the cloud, anywhere. See [ROADMAP.md](ROADMAP.md) for the phase
+plan; the LLM translation layer comes later and will simply emit the same
+JSON.
 
 ```
 natural language ──▶ [LLM layer, v0.2] ──▶ commands.json ──▶ swpilot run
@@ -154,6 +157,28 @@ plane name or a face reference). `"standard": "M6"` fills unset dimensions
 from a nominal metric table (ISO 273 clearance, socket-head counterbores,
 90° flat-head countersinks, M3–M12) — nominal conveniences, not certified
 standard data; explicit fields always win.
+
+### Assemblies (v0.3)
+
+| op | fields | notes |
+|---|---|---|
+| `new_part` / `new_assembly` | `name?` | named documents in one flat stream; creating activates |
+| `activate_document` | `name` | explicit switching |
+| `insert_component` | `part` *or* `file`+`envelope?`, `name?`, `at`, `rotate` (90° steps), `fixed?` | same-run parts must be `save_part`-ed first; first component auto-fixed |
+| `mate` | `type`, `a`, `b`, `value?` | entities: `{component, facing, of_feature?}` (planar) or `{component, of_feature, at?}` (cylindrical); `width` deferred |
+| `save_assembly` | `path` (`.SLDASM`) | reports under-constrained components |
+| `bolt_circle` (macro) | `bolt {part, shank_feature, head_feature}`, `holes {component, of_feature}`, `seat` | one bolt per hole: insert + concentric + head-seat coincident, positions read from the twin |
+
+The **axis-aligned snap-solver** makes mates on this geometry exact: mates
+pin translation axes and lock rotations, components snap into solved
+positions, conflicting pins fail as over-constrained (mismatched hole
+patterns are caught with the offset in mm), duplicate pins warn as
+redundant, and `save_assembly` reports free DOF per component — with a
+bolt's spin about its own mated axis labeled as normal for fasteners.
+`examples/bolted_cover.json` is the acceptance case: a 120×80×12 base, an
+8 mm cover located by one coincident + two concentric mates, and four
+in-run-modeled M8 socket-head cap screws placed by `bolt_circle` through
+Ø9 clearance holes.
 
 Expansion rejects holes that would cross an edge, overlap each other, or
 touch anything tangentially (SolidWorks refuses zero-thickness geometry) —

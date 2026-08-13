@@ -27,6 +27,7 @@ SW_END_COND_BLIND = 0
 SW_END_COND_THROUGH_ALL = 1
 # swconst.swUserPreferenceStringValue_e
 SW_DEFAULT_TEMPLATE_PART = 8
+SW_DEFAULT_TEMPLATE_ASSEMBLY = 9
 # swconst.swSaveAsVersion_e / swconst.swSaveAsOptions_e
 SW_SAVE_AS_CURRENT_VERSION = 0
 SW_SAVE_AS_OPTIONS_SILENT = 1
@@ -51,6 +52,23 @@ SW_SLOT_LENGTH_CENTER_CENTER = 0
 SW_MARK_PATTERN_DIRECTION1 = 1
 SW_MARK_PATTERN_DIRECTION2 = 2
 SW_MARK_PATTERN_FEATURES = 4
+
+# swconst.swMateType_e
+SW_MATE_TYPES: dict[str, int] = {
+    "coincident": 0,
+    "concentric": 1,
+    "parallel": 3,
+    "distance": 5,
+    "width": 11,
+}
+# swconst.swMateAlign_e: CLOSEST lets SolidWorks pick the non-flipping
+# configuration for the components' current positions, which the twin has
+# already made geometrically consistent.
+SW_MATE_ALIGN_CLOSEST = 2
+# swconst.swAddComponentConfigOptions_e
+SW_ADD_COMPONENT_CURRENT_CONFIG = 0
+# Both-document selection entity mark for mates.
+SW_MARK_MATE_ENTITY = 1
 
 
 @dataclass(frozen=True)
@@ -146,6 +164,247 @@ def new_part_calls(template: str = "<default part template>") -> list[CallSpec]:
     the real one (preference or override) and logs that instead.
     """
     return [get_default_part_template(), new_document(template)]
+
+
+def new_assembly_calls(template: str = "<default assembly template>") -> list[CallSpec]:
+    """The call plan for ``new_assembly`` (template resolution like new_part)."""
+    return [
+        CallSpec(
+            target="App",
+            method="GetUserPreferenceStringValue",
+            args=(SW_DEFAULT_TEMPLATE_ASSEMBLY,),
+            note="resolve default assembly template path (swDefaultTemplateAssembly)",
+        ),
+        CallSpec(
+            target="App",
+            method="NewDocument",
+            args=(template, 0, 0.0, 0.0),
+            check="non_null",
+            note="create new assembly document from template",
+        ),
+    ]
+
+
+def activate_document_calls(logical_name: str) -> list[CallSpec]:
+    """Switch the active document.
+
+    Documented mock/real divergence (like the template placeholder): the
+    mock logs the session-logical document name; the COM backend passes
+    the document's real window title (captured at creation), since
+    ActivateDoc2 addresses documents by title.
+    """
+    return [
+        CallSpec(
+            target="App",
+            method="ActivateDoc2",
+            args=(logical_name, False, 0),
+            check="non_null",
+            note=f"activate document '{logical_name}' (COM uses its real title; "
+            "trailing 0 is the ByRef Errors slot under late binding)",
+        ),
+    ]
+
+
+def insert_component_calls(
+    path: str, name: str, translation_mm: tuple[float, float, float]
+) -> list[CallSpec]:
+    """Insert a component from a file at a position, then rename it.
+
+    IComponent2 exposes ``Name2`` (settable) rather than ``Name`` — the
+    rename spec reuses the LastFeature mechanism with that property.
+    """
+    x, y, z = translation_mm
+    return [
+        # ISldWorks/IAssemblyDoc AddComponent5(CompName, ConfigOption,
+        #   NewConfigName, UseConfigForPartReferences, ExistingConfigName,
+        #   X, Y, Z) -> IComponent2
+        CallSpec(
+            target="Model",
+            method="AddComponent5",
+            args=(
+                path,
+                SW_ADD_COMPONENT_CURRENT_CONFIG,
+                "",
+                False,
+                "",
+                x * MM_TO_M,
+                y * MM_TO_M,
+                z * MM_TO_M,
+            ),
+            check="non_null",
+            remember=True,
+            note=f"insert component '{name}' from {path} at ({x}, {y}, {z}) mm",
+        ),
+        CallSpec(
+            target="LastFeature",
+            method="Name2",
+            kind="set",
+            value=name,
+            note=f"rename component instance to '{name}' (twin name parity)",
+        ),
+    ]
+
+
+def component_transform_calls(
+    name: str, rotation_row_major: list[float], translation_mm: tuple[float, float, float]
+) -> list[CallSpec]:
+    """Apply a rotation+translation to a component via IComponent2.Transform2.
+
+    The 16-float math-transform layout is rows of R (9), translation in
+    meters (3), scale (1), then three zeros. The COM backend builds the
+    IMathTransform via IMathUtility.CreateTransform; the mock logs the
+    same 16 numbers.
+    """
+    t = [v * MM_TO_M for v in translation_mm]
+    data16 = tuple(rotation_row_major + t + [1.0, 0.0, 0.0, 0.0])
+    return [
+        CallSpec(
+            target=f"Component:{name}",
+            method="Transform2",
+            kind="set",
+            value=data16,
+            note=f"orient component '{name}' (row-major R, translation in meters)",
+        ),
+        CallSpec(
+            target="Model",
+            method="EditRebuild3",
+            note="rebuild after component transform",
+        ),
+    ]
+
+
+def fix_component_calls(name: str, assembly_hint: str = "<asm>") -> list[CallSpec]:
+    """Fix a component in place.
+
+    Divergence note: component selection strings are '<instance>@<title>';
+    the mock logs the '<asm>' placeholder, the COM backend substitutes the
+    assembly's real title.
+    """
+    return [
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="fresh selection for fix",
+        ),
+        CallSpec(
+            target="Model.Extension",
+            method="SelectByID2",
+            args=(f"{name}@{assembly_hint}", "COMPONENT", 0.0, 0.0, 0.0, False, 0, None, 0),
+            check="truthy",
+            note=f"select component '{name}' to fix",
+        ),
+        CallSpec(
+            target="Model",
+            method="FixComponent",
+            note="fix the selected component",
+        ),
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="clear selection after fix",
+        ),
+    ]
+
+
+def add_mate_calls(
+    mate_type: str,
+    pick_a_mm: tuple[float, float, float],
+    pick_b_mm: tuple[float, float, float],
+    value_mm: float | None,
+    name: str,
+) -> list[CallSpec]:
+    """Select two component faces by world coordinates and mate them.
+
+    Cylindrical faces are also selected with entity type "FACE" — the
+    pick point lies on the cylinder wall.
+    """
+    out = [
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="fresh selection for mate",
+        )
+    ]
+    for px, py, pz in (pick_a_mm, pick_b_mm):
+        out.append(
+            CallSpec(
+                target="Model.Extension",
+                method="SelectByID2",
+                args=(
+                    "",
+                    "FACE",
+                    px * MM_TO_M,
+                    py * MM_TO_M,
+                    pz * MM_TO_M,
+                    True,
+                    SW_MARK_MATE_ENTITY,
+                    None,
+                    0,
+                ),
+                check="truthy",
+                note=f"select mate face at ({px:.4g}, {py:.4g}, {pz:.4g}) mm",
+            )
+        )
+    out.append(
+        # IAssemblyDoc.AddMate5(MateTypeFromEnum, AlignFromEnum, Flip,
+        #   Distance, DistanceAbsUpperLimit, DistanceAbsLowerLimit,
+        #   GearRatioNumerator, GearRatioDenominator, Angle,
+        #   AngleAbsUpperLimit, AngleAbsLowerLimit, ForPositioningOnly,
+        #   LockRotation, WidthMateOption, ErrorStatus) -> IMate2
+        # ErrorStatus is ByRef; the trailing 0 fills its slot under late
+        # binding (pywin32 returns out-params alongside the result).
+        CallSpec(
+            target="Model",
+            method="AddMate5",
+            args=(
+                SW_MATE_TYPES[mate_type],
+                SW_MATE_ALIGN_CLOSEST,
+                False,  # Flip
+                (value_mm or 0.0) * MM_TO_M,  # Distance
+                0.0,
+                0.0,  # distance limits
+                0.0,
+                0.0,  # gear ratio
+                0.0,
+                0.0,
+                0.0,  # angle + limits
+                False,  # ForPositioningOnly
+                False,  # LockRotation
+                0,  # WidthMateOption
+                0,  # ErrorStatus (ByRef slot)
+            ),
+            check="non_null",
+            remember=True,
+            note=f"{mate_type} mate '{name}'"
+            + (f" at {value_mm} mm" if value_mm is not None else ""),
+        )
+    )
+    out.append(rename_last_feature(name))
+    out.append(
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="clear selection after mate",
+        )
+    )
+    return out
+
+
+def save_assembly_calls(path: str) -> list[CallSpec]:
+    """Save the assembly (same SaveAs3 semantics as save_part)."""
+    return [
+        CallSpec(
+            target="Model",
+            method="SaveAs3",
+            args=(path, SW_SAVE_AS_CURRENT_VERSION, SW_SAVE_AS_OPTIONS_SILENT),
+            check="status_zero",
+            note="save assembly (silent); returns swFileSaveError_e status, 0 = success",
+        ),
+    ]
 
 
 def create_plane_calls(name: str, base_display: str, distance_mm: float) -> list[CallSpec]:

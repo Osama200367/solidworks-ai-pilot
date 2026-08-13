@@ -60,9 +60,13 @@ class TestAddCornerHoles:
         cut = cmds[9]
         assert isinstance(cut, CutExtrude) and cut.through_all is True
 
+    def test_without_document_rejected(self) -> None:
+        with pytest.raises(CommandFileError, match="no document is open"):
+            expand({"op": "add_corner_holes", "diameter": 8, "margin": 10})
+
     def test_without_boss_rejected(self) -> None:
         with pytest.raises(CommandFileError, match="no boss feature"):
-            expand({"op": "add_corner_holes", "diameter": 8, "margin": 10})
+            expand({"op": "new_part"}, {"op": "add_corner_holes", "diameter": 8, "margin": 10})
 
     def test_non_rectangular_boss_rejected(self) -> None:
         with pytest.raises(CommandFileError, match="single rectangle"):

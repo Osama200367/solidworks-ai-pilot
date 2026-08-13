@@ -47,6 +47,10 @@ class SolidWorksBackend(Backend):
         self._model: Any = None
         self._last_feature: Any = None
         self._part_template = part_template or os.environ.get("SWPILOT_PART_TEMPLATE")
+        self._assembly_template = os.environ.get("SWPILOT_ASSEMBLY_TEMPLATE")
+        self._documents: dict[str, Any] = {}  # logical name -> model handle
+        self._titles: dict[str, str] = {}  # logical name -> window title
+        self._components: dict[str, Any] = {}  # instance name -> IComponent2
 
     # -- CallSpec execution --------------------------------------------
 
@@ -68,6 +72,16 @@ class SolidWorksBackend(Backend):
                 raise BackendError(
                     "internal error: no feature available to rename (LastFeature)"
                 )
+        elif root_name.startswith("Component:") or (
+            root_name == "Component" and rest
+        ):
+            comp_name = target.partition(":")[2]
+            obj = self._components.get(comp_name)
+            if obj is None:
+                raise BackendError(
+                    f"internal error: unknown component handle {comp_name!r}"
+                )
+            return obj
         else:
             raise BackendError(f"internal error: unknown call target root {root_name!r}")
         if rest:
@@ -81,7 +95,14 @@ class SolidWorksBackend(Backend):
             # can fail on attribute access, not just on the final call.
             obj = self._resolve_target(spec.target)
             if spec.kind == "set":
-                setattr(obj, spec.method, spec.value)
+                value = spec.value
+                if spec.method == "Transform2" and spec.target.startswith("Component:"):
+                    # The logged value is 16 floats; the live property needs
+                    # an IMathTransform built from them.
+                    mu = self._app.GetMathUtility()
+                    assert isinstance(spec.value, tuple)
+                    value = mu.CreateTransform(list(spec.value))
+                setattr(obj, spec.method, value)
                 result = None
             else:
                 result = getattr(obj, spec.method)(*spec.args)
@@ -118,11 +139,18 @@ class SolidWorksBackend(Backend):
         for spec in specs:
             self._execute(spec)
 
-    # -- primitive operations ------------------------------------------
+    # -- document lifecycle --------------------------------------------
 
-    def new_part(self) -> None:
-        if self._model is not None:
-            raise BackendError("new_part: a part is already open; one part per run")
+    def _register_document(self, name: str, model: Any) -> None:
+        self._documents[name] = model
+        try:
+            self._titles[name] = str(model.GetTitle())
+        except Exception:
+            self._titles[name] = name
+        self._model = model
+        self._active_doc = name
+
+    def new_part(self, name: str) -> None:
         template = self._part_template
         if template is None:
             template = self._execute(calls.get_default_part_template())
@@ -132,7 +160,74 @@ class SolidWorksBackend(Backend):
                     "Tools > Options > Default Templates, or pass --template / set "
                     "SWPILOT_PART_TEMPLATE"
                 )
-        self._model = self._execute(calls.new_document(str(template)))
+        model = self._execute(calls.new_document(str(template)))
+        self._register_document(name, model)
+
+    def new_assembly(self, name: str) -> None:
+        template = self._assembly_template
+        specs = calls.new_assembly_calls()
+        if template is None:
+            template = self._execute(specs[0])
+            if not template:
+                raise BackendError(
+                    "new_assembly: SolidWorks returned no default assembly template; "
+                    "set one in Tools > Options > Default Templates, or set "
+                    "SWPILOT_ASSEMBLY_TEMPLATE"
+                )
+        model = self._execute(calls.new_document(str(template)))
+        self._register_document(name, model)
+
+    def activate_document(self, name: str, kind: str) -> None:
+        title = self._titles.get(name)
+        if title is None:
+            raise BackendError(f"activate_document: unknown document {name!r}")
+        (spec,) = calls.activate_document_calls(title)
+        model = self._execute(spec)
+        self._documents[name] = model
+        self._model = model
+        self._active_doc = name
+
+    # -- assembly operations -------------------------------------------
+
+    def insert_component(
+        self,
+        path: str,
+        name: str,
+        translation: tuple[float, float, float],
+        rotation_row_major: list[float] | None,
+        fixed: bool,
+    ) -> None:
+        self._require_model("insert_component")
+        abs_path = os.path.abspath(path)
+        insert_spec, rename_spec = calls.insert_component_calls(abs_path, name, translation)
+        component = self._execute(insert_spec)
+        self._components[name] = component
+        self._execute(rename_spec)
+        if rotation_row_major is not None:
+            self._execute_all(
+                calls.component_transform_calls(name, rotation_row_major, translation)
+            )
+        if fixed:
+            asm_title = self._titles.get(self._active_doc or "", "<asm>")
+            self._execute_all(calls.fix_component_calls(name, asm_title))
+
+    def add_mate(
+        self,
+        mate_type: str,
+        pick_a: Vec3,
+        pick_b: Vec3,
+        value: float | None,
+        name: str,
+    ) -> None:
+        self._require_model("add_mate")
+        self._execute_all(calls.add_mate_calls(mate_type, pick_a, pick_b, value, name))
+
+    def save_assembly(self, path: str) -> None:
+        self._require_model("save_assembly")
+        abs_path = os.path.abspath(path)
+        self._execute_all(calls.save_assembly_calls(abs_path))
+
+    # -- primitive operations ------------------------------------------
 
     def create_plane(self, name: str, base_display: str, distance: float) -> None:
         self._require_model("create_plane")

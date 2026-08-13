@@ -17,7 +17,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_valida
 
 from swpilot.model.presets import FASTENER_PRESETS, preset_names
 
-SCHEMA_VERSION = "0.2"
+SCHEMA_VERSION = "0.3"
 
 
 def _reject_bool(v: object) -> object:
@@ -98,9 +98,135 @@ class FaceRef(_Sub):
 
 
 class NewPart(_Cmd):
-    """Create a new, empty part document."""
+    """Create a new, empty part document (and make it active).
+
+    ``name`` is the session-local document name other commands refer to
+    (insert_component, activate_document); defaults to Part1, Part2, ...
+    """
 
     op: Literal["new_part"] = "new_part"
+    name: str | None = None
+
+
+class NewAssembly(_Cmd):
+    """Create a new, empty assembly document (and make it active)."""
+
+    op: Literal["new_assembly"] = "new_assembly"
+    name: str | None = None
+
+
+class ActivateDocument(_Cmd):
+    """Switch the active document (part or assembly) by session name."""
+
+    op: Literal["activate_document"] = "activate_document"
+    name: str = Field(min_length=1)
+
+
+class RotationStepSpec(_Sub):
+    """A 90-degree-step rotation about a world axis."""
+
+    axis: AxisName
+    degrees: int
+
+    @model_validator(mode="after")
+    def _check_step(self) -> RotationStepSpec:
+        if self.degrees % 90 != 0 or self.degrees % 360 == 0:
+            raise ValueError(
+                f"rotate: degrees must be a non-zero multiple of 90, got {self.degrees}"
+            )
+        return self
+
+
+class InsertComponent(_Cmd):
+    """Insert a component into the active assembly.
+
+    Either ``part`` (a part document built in this session — it must be
+    save_part-ed first, since SolidWorks inserts components from files)
+    or ``file`` (an existing .SLDPRT path; give ``envelope`` [width,
+    height, thickness] so its faces can be resolved for mates —
+    declared, not verified). ``rotate`` lists 90-degree steps about
+    world axes, applied in order. The first inserted component is fixed
+    automatically (SolidWorks convention).
+    """
+
+    op: Literal["insert_component"] = "insert_component"
+    part: str | None = None
+    file: str | None = None
+    name: str | None = None
+    at: tuple[Finite, Finite, Finite] = (0.0, 0.0, 0.0)
+    rotate: list[RotationStepSpec] = Field(default_factory=list)
+    fixed: bool = False
+    envelope: tuple[PositiveMm, PositiveMm, PositiveMm] | None = None
+
+    @model_validator(mode="after")
+    def _check_source(self) -> InsertComponent:
+        if (self.part is None) == (self.file is None):
+            raise ValueError(
+                "insert_component: give exactly one of 'part' (a session part "
+                "document) or 'file' (an existing .SLDPRT path)"
+            )
+        if self.file is not None and not self.file.lower().endswith(".sldprt"):
+            raise ValueError("insert_component: 'file' must be a .SLDPRT path")
+        if self.part is not None and self.envelope is not None:
+            raise ValueError(
+                "insert_component: 'envelope' is only for external files; same-run "
+                "parts carry their real geometry"
+            )
+        return self
+
+
+class MateFace(_Sub):
+    """A planar face of a component, by world-facing direction."""
+
+    component: str
+    facing: FacingName
+    of_feature: str | None = None
+
+
+class MateCylinder(_Sub):
+    """A cylindrical face of a component (hole wall or shank).
+
+    ``of_feature`` names the circular boss/cut; ``at`` (sketch
+    coordinates) picks one circle when the feature has several.
+    """
+
+    component: str
+    of_feature: str
+    at: Point2D | None = None
+
+
+MateEntity = MateFace | MateCylinder
+
+
+class Mate(_Cmd):
+    """Mate two component entities in the active assembly."""
+
+    op: Literal["mate"] = "mate"
+    type: Literal["coincident", "concentric", "distance", "parallel", "width"]
+    a: MateEntity
+    b: MateEntity
+    value: PositiveMm | None = None  # distance mates only
+
+    @model_validator(mode="after")
+    def _check_value(self) -> Mate:
+        if self.type == "distance" and self.value is None:
+            raise ValueError("mate: distance mates require 'value' (mm)")
+        if self.type != "distance" and self.value is not None:
+            raise ValueError(f"mate: 'value' is only valid for distance mates, not {self.type}")
+        return self
+
+
+class SaveAssembly(_Cmd):
+    """Save the active assembly. ``path`` must end in .sldasm."""
+
+    op: Literal["save_assembly"] = "save_assembly"
+    path: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_extension(self) -> SaveAssembly:
+        if not self.path.lower().endswith(".sldasm"):
+            raise ValueError("save_assembly: path must end with .SLDASM")
+        return self
 
 
 class CreatePlane(_Cmd):
@@ -295,6 +421,41 @@ class CreatePlate(_Cmd):
     plane: StandardPlane = "front"
 
 
+class BoltSpec(_Sub):
+    """The bolt part for a bolt_circle: its shank and head boss features.
+
+    The macro derives the seat orientation from the geometry (the head
+    face that looks toward the shank).
+    """
+
+    part: str
+    shank_feature: str = "Boss-Extrude1"
+    head_feature: str = "Boss-Extrude2"
+
+
+class HolesRef(_Sub):
+    """A multi-circle hole feature of an assembly component."""
+
+    component: str
+    of_feature: str
+
+
+class BoltCircle(_Cmd):
+    """One bolt per hole: insert + concentric + head-seat coincident.
+
+    Reads the hole positions straight from the referenced component's
+    hole feature in the twin and expands to per-instance components and
+    mates (each bolt independently fully mated). The bolt part must be
+    built (and saved) in this session.
+    """
+
+    op: Literal["bolt_circle"] = "bolt_circle"
+    bolt: BoltSpec
+    holes: HolesRef
+    seat: MateFace
+    prefix: str = "bolt"
+
+
 class AddCornerHoles(_Cmd):
     """Four through-holes, one per corner of the last rectangular boss.
 
@@ -394,6 +555,8 @@ class Hole(_Cmd):
 
 PrimitiveCommand = Annotated[
     NewPart
+    | NewAssembly
+    | ActivateDocument
     | CreatePlane
     | CreateAxis
     | CreateSketch
@@ -406,16 +569,21 @@ PrimitiveCommand = Annotated[
     | Chamfer
     | LinearPattern
     | CircularPattern
-    | SavePart,
+    | InsertComponent
+    | Mate
+    | SavePart
+    | SaveAssembly,
     Field(discriminator="op"),
 ]
 
 MacroCommand = Annotated[
-    CreatePlate | AddCornerHoles | Hole, Field(discriminator="op")
+    CreatePlate | AddCornerHoles | Hole | BoltCircle, Field(discriminator="op")
 ]
 
 Command = Annotated[
     NewPart
+    | NewAssembly
+    | ActivateDocument
     | CreatePlane
     | CreateAxis
     | CreateSketch
@@ -428,16 +596,22 @@ Command = Annotated[
     | Chamfer
     | LinearPattern
     | CircularPattern
+    | InsertComponent
+    | Mate
     | SavePart
+    | SaveAssembly
     | CreatePlate
     | AddCornerHoles
-    | Hole,
+    | Hole
+    | BoltCircle,
     Field(discriminator="op"),
 ]
 
 PRIMITIVE_OPS = frozenset(
     {
         "new_part",
+        "new_assembly",
+        "activate_document",
         "create_plane",
         "create_axis",
         "create_sketch",
@@ -450,10 +624,13 @@ PRIMITIVE_OPS = frozenset(
         "chamfer",
         "linear_pattern",
         "circular_pattern",
+        "insert_component",
+        "mate",
         "save_part",
+        "save_assembly",
     }
 )
-MACRO_OPS = frozenset({"create_plate", "add_corner_holes", "hole"})
+MACRO_OPS = frozenset({"create_plate", "add_corner_holes", "hole", "bolt_circle"})
 
 
 class CommandFile(BaseModel):
@@ -461,5 +638,5 @@ class CommandFile(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["0.1", "0.2"]
+    schema_version: Literal["0.1", "0.2", "0.3"]
     commands: list[Command] = Field(min_length=1)

@@ -47,11 +47,12 @@ class TestHappyPath:
 
     def test_report_dict_shape(self) -> None:
         d = run_commands(*GOOD).to_dict()
-        assert d["schema_version"] == "0.2"
+        assert d["schema_version"] == "0.3"
         assert d["success"] is True
         assert d["commands_total"] == d["commands_ok"] == 10
         assert isinstance(d["call_log"], list)
-        assert d["final_state"]["units"] == "mm"
+        part_doc = d["final_state"]["documents"][0]
+        assert part_doc["kind"] == "part" and part_doc["units"] == "mm"
         assert d["backend_state"]["backend"] == "mock"
         first = d["commands"][0]
         assert first["op"] == "new_part"

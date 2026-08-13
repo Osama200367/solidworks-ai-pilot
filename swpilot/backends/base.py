@@ -36,11 +36,53 @@ class Backend(ABC):
     def __init__(self) -> None:
         self.call_log: list[CallSpec] = []
         self._warnings: list[str] = []
+        self._active_doc: str | None = None
+
+    # -- document lifecycle --------------------------------------------
+
+    def mark_active(self, name: str) -> None:
+        """Record that a just-created document is the active one."""
+        self._active_doc = name
+
+    def ensure_active(self, name: str, kind: str) -> None:
+        """Switch documents only when needed (no-op when already active)."""
+        if self._active_doc != name:
+            self.activate_document(name, kind)
+            self._active_doc = name
+
+    @abstractmethod
+    def activate_document(self, name: str, kind: str) -> None: ...
 
     # -- primitive operations ------------------------------------------
 
     @abstractmethod
-    def new_part(self) -> None: ...
+    def new_part(self, name: str) -> None: ...
+
+    @abstractmethod
+    def new_assembly(self, name: str) -> None: ...
+
+    @abstractmethod
+    def insert_component(
+        self,
+        path: str,
+        name: str,
+        translation: tuple[float, float, float],
+        rotation_row_major: list[float] | None,
+        fixed: bool,
+    ) -> None: ...
+
+    @abstractmethod
+    def add_mate(
+        self,
+        mate_type: str,
+        pick_a: Vec3,
+        pick_b: Vec3,
+        value: float | None,
+        name: str,
+    ) -> None: ...
+
+    @abstractmethod
+    def save_assembly(self, path: str) -> None: ...
 
     @abstractmethod
     def create_plane(self, name: str, base_display: str, distance: float) -> None: ...

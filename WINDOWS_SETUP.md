@@ -81,6 +81,26 @@ Useful flags: `--no-visible` runs SolidWorks without showing the window;
    diameter at the surface (the draft direction flag `Ddir1` is the thing to
    flip if the cone opens the wrong way).
 
+## v0.3 smoke-test checklist (assemblies)
+
+Run `examples/bolted_cover.json` and verify, in order:
+
+1. **Document juggling** — four documents open (base, cover, m8_bolt,
+   assembly); `ActivateDoc2` addresses documents by their real window
+   titles, which the backend captures at creation.
+2. **AddMate5** — the highest-risk call of the phase (15 parameters,
+   ByRef ErrorStatus trailing slot under late binding, align=CLOSEST).
+   The cover should sit flush on the base with the hole patterns aligned.
+3. **Component renaming via `Name2`** — instance names in the tree must
+   read base_1, cover_1, bolt_1..bolt_4.
+4. **Coordinate face picks inside components** — mate selections use world
+   coordinates of transformed faces; if a mate grabs a wrong face, compare
+   the pick coordinates in the report's `resolved` entities against the
+   model.
+5. **Component rotation** — none is needed in the acceptance file; test a
+   `rotate: [{"axis": "x", "degrees": 180}]` insert separately to verify
+   the `Transform2` / `IMathUtility.CreateTransform` path.
+
 ## What runs where
 
 | layer | cloud/CI | Windows |

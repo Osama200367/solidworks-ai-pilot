@@ -128,13 +128,27 @@ def run(
 ) -> None:
     """Execute a command file against the chosen backend."""
     cmd_file, expanded = _load_or_exit(file)
+    report_path = report if report is not None else file.with_suffix(file.suffix + ".report.json")
+    _execute_and_report(
+        cmd_file, expanded, backend, visible, template, report_path
+    )
+
+
+def _execute_and_report(
+    cmd_file: CommandFile,
+    expanded: list[ExpandedCommand],
+    backend: BackendChoice,
+    visible: bool | None,
+    template: str | None,
+    report_path: Path,
+) -> None:
+    """Run expanded commands against a backend, write the report, print status."""
     be = _make_backend(backend, visible, template)
     try:
         run_report = execute(expanded, be, schema_version=cmd_file.schema_version)
     finally:
         be.close()
 
-    report_path = report if report is not None else file.with_suffix(file.suffix + ".report.json")
     report_path.write_text(json.dumps(run_report.to_dict(), indent=2) + "\n", encoding="utf-8")
 
     ok = sum(1 for r in run_report.results if r.status == "ok")
@@ -153,6 +167,200 @@ def run(
     if not run_report.success:
         raise typer.Exit(code=1)
     typer.secho("success", fg=typer.colors.GREEN)
+
+
+# --------------------------------------------------------------------------
+# Natural-language layer (v1.0)
+# --------------------------------------------------------------------------
+
+
+class AiMode(StrEnum):
+    copy_paste = "copy-paste"
+    api = "api"
+
+
+@app.command()
+def ai(
+    description: Annotated[str, typer.Argument(help="Plain-language part/assembly description")],
+    mode: Annotated[
+        AiMode, typer.Option(help="copy-paste (any free chat) or api")
+    ] = AiMode.copy_paste,
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Write the prompt bundle here (copy-paste mode) instead of stdout"),
+    ] = None,
+    backend: Annotated[
+        BackendChoice, typer.Option(help="Execution backend (api mode)")
+    ] = BackendChoice.mock,
+    save: Annotated[
+        Path | None,
+        typer.Option(help="Write the validated CommandFile JSON here (api mode)"),
+    ] = None,
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Skip the confirmation prompt before execution")
+    ] = False,
+) -> None:
+    """Translate a description into SW-Pilot commands via an LLM.
+
+    copy-paste (default): prints a prompt bundle to paste into ANY free AI
+    chat; paste the AI's JSON back through `swpilot ai-apply`. No API key.
+
+    api: sends the bundle to a configured OpenAI-compatible endpoint
+    (SWPILOT_LLM_* env), validates with one auto-repair, then executes.
+    """
+    from swpilot.llm import build_bundle
+
+    bundle = build_bundle(description)
+    if mode is AiMode.copy_paste:
+        if out is not None:
+            out.write_text(bundle + "\n", encoding="utf-8")
+            typer.secho(f"prompt bundle written to {out}", fg=typer.colors.GREEN, err=True)
+            typer.secho(
+                "Paste it into any AI chat, then run:\n"
+                "  swpilot ai-apply <the-json-file>   (or --paste to read stdin)",
+                fg=typer.colors.CYAN,
+                err=True,
+            )
+        else:
+            typer.echo(bundle)
+        return
+
+    _ai_api(description, bundle, backend, save, yes)
+
+
+def _ai_api(
+    description: str,
+    bundle: str,
+    backend: BackendChoice,
+    save: Path | None,
+    yes: bool,
+) -> None:
+    from swpilot.llm import validate_or_repair
+    from swpilot.llm.client import (
+        LLMConfig,
+        LLMConfigError,
+        LLMRequestError,
+        OpenAICompatibleClient,
+    )
+
+    try:
+        client = OpenAICompatibleClient(LLMConfig.from_env())
+    except LLMConfigError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+    try:
+        first = client.complete(bundle)
+        outcome = validate_or_repair(description, first, retry=client.complete)
+    except LLMRequestError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+    if not outcome.ok:
+        typer.secho(
+            "the model's JSON did not validate after one repair attempt:",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        typer.secho(outcome.errors or "unknown error", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2)
+    if outcome.repaired:
+        typer.secho("(the model's first JSON was auto-repaired)", fg=typer.colors.YELLOW, err=True)
+    assert outcome.command_file is not None
+    _apply_command_file(outcome.command_file, backend, save, yes)
+
+
+@app.command(name="ai-apply")
+def ai_apply(
+    file: Annotated[
+        Path | None,
+        typer.Argument(help="File with the LLM's JSON response (omit with --paste)"),
+    ] = None,
+    paste: Annotated[
+        bool, typer.Option("--paste", help="Read the LLM response from stdin instead")
+    ] = False,
+    backend: Annotated[
+        BackendChoice, typer.Option(help="Execution backend")
+    ] = BackendChoice.mock,
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Skip the confirmation prompt before execution")
+    ] = False,
+) -> None:
+    """Validate an LLM's JSON response and execute it (copy-paste mode).
+
+    Extracts the CommandFile from the pasted text (prose/fences tolerated),
+    validates it; if invalid, prints a ready-to-paste repair prompt and
+    exits without executing anything.
+    """
+    import sys
+
+    from swpilot.llm import validate_or_repair
+
+    if paste:
+        response = sys.stdin.read()
+    elif file is not None:
+        response = file.read_text(encoding="utf-8-sig")
+    else:
+        typer.secho("give a file argument or --paste", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2)
+
+    outcome = validate_or_repair("(from copy-paste)", response)
+    if not outcome.ok:
+        typer.secho("the pasted JSON did not validate:", fg=typer.colors.RED, err=True)
+        typer.secho(outcome.errors or "unknown error", fg=typer.colors.RED, err=True)
+        typer.secho(
+            "\nPaste this repair prompt back into the SAME chat, then run "
+            "ai-apply again with the corrected JSON:\n",
+            fg=typer.colors.CYAN,
+            err=True,
+        )
+        typer.echo(outcome.repair_prompt or "")
+        raise typer.Exit(code=2)
+    assert outcome.command_file is not None
+    _apply_command_file(outcome.command_file, backend, None, yes)
+
+
+def _apply_command_file(
+    cmd_file: CommandFile,
+    backend: BackendChoice,
+    save: Path | None,
+    yes: bool,
+) -> None:
+    """Show the parsed commands, confirm, then expand + execute (safety gate)."""
+    try:
+        expanded = expand_commands(list(cmd_file.commands))
+    except CommandFileError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+
+    if save is not None:
+        save.write_text(
+            json.dumps(cmd_file.model_dump(), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        typer.secho(f"validated CommandFile written to {save}", fg=typer.colors.GREEN, err=True)
+
+    # Safety: show the parsed command list before any execution.
+    typer.secho(
+        f"parsed {len(cmd_file.commands)} command(s) "
+        f"→ {len(expanded)} after macro expansion:",
+        fg=typer.colors.CYAN,
+    )
+    for c in cmd_file.commands:
+        params = {k: v for k, v in c.model_dump(exclude={"op"}).items() if v not in (None, [], {})}
+        typer.echo(f"  {c.op} {params}")
+
+    # The mock backend is side-effect-free; the solidworks backend touches
+    # the live app, so require an explicit confirmation there.
+    if (
+        backend is BackendChoice.solidworks
+        and not yes
+        and not typer.confirm("Execute these commands in SolidWorks?", default=False)
+    ):
+        typer.secho("aborted (nothing executed)", fg=typer.colors.YELLOW)
+        raise typer.Exit(code=0)
+
+    report_path = Path("ai_run.report.json")
+    _execute_and_report(cmd_file, expanded, backend, None, None, report_path)
 
 
 if __name__ == "__main__":

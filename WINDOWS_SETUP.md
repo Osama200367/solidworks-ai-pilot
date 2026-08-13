@@ -119,15 +119,18 @@ math and that the mock/COM call plans are identical; the following can
 exercises everything), then `examples/bracket_drawing.json`.
 
 1. **Section view sequence** — the single riskiest sequence of the
-   project: `ActivateView("front")` → `SketchManager.CreateLine` (the
-   cutting line, passed in SHEET coordinates — if the line lands in the
-   wrong place, view-activated sketching uses view/model coordinates
-   instead and `swpilot/backends/calls.py::section_view_calls` needs a
-   coordinate transform) → `CreateSectionViewAt5(x, y, 0, "A", 0,
-   Nothing, 0)` consuming the still-selected line → `ActivateSheet
-   ("Sheet1")` (fails harmlessly if your template names sheets
-   differently — but then later dimension picks may run in the wrong
-   coordinate space).
+   project: `ActivateView("front")` → `SketchManager.CreateLine` with
+   the cutting line in PARENT-VIEW sketch coordinates (model scale,
+   origin = the projection of the model origin — matching the official
+   `CreateSectionViewAt5` example) → `CreateSectionViewAt5(x, y, 0,
+   "A", 0, Nothing, 0)` (placement in sheet meters) consuming the
+   still-selected line → `ActivateSheet(<live sheet name>)`. The live
+   check is the view-coordinate SCALE convention: if the flange's
+   cutting line lands on the part but at half/double length, adjust the
+   view-scale division in `DrawingTracker.section_view`. The sheet name
+   is read live from `GetCurrentSheet` and a failed `ActivateSheet`
+   aborts the run (a silent failure would leave later annotation picks
+   in view coordinates).
 2. **Section image orientation** — the twin assumes SolidWorks orients
    the section arrows to the sheet's projection angle: a vertical section
    placed right shows the right-view image (`u = -z` third-angle,
@@ -155,13 +158,16 @@ exercises everything), then `examples/bracket_drawing.json`.
    `swpilot/backends/calls.py` are the first suspects.
 6. **Projected view placement** — `CreateUnfoldedViewAt3` drops the top
    view above and the right view to the right (third angle). Also run a
-   `"projection": "first"` variant: SolidWorks must flip the images
-   (the twin already flips the placements).
+   `"projection": "first"` variant: the placements flip (top below,
+   right to the left) while each view's IMAGE stays identical to the
+   third-angle one — first vs third angle never changes an individual
+   view's image, only the arrangement.
 7. **Title block** — the custom properties (Description, DrawnBy,
-   DrawnDate) set via `AddCustomInfo3` on the *model* must appear in the
-   sheet format's `$PRPSHEET` fields; a customized template may not map
-   every field (the `DIMENSIONS IN MM` note is placed explicitly and
-   must always appear bottom-left).
+   DrawnDate) set via `CustomPropertyManager("").Add3` (delete-and-add,
+   so re-drawing the same model updates them) on the *model* must appear
+   in the sheet format's `$PRPSHEET` fields; a customized template may
+   not map every field (the `DIMENSIONS IN MM` note is placed explicitly
+   and must always appear bottom-left).
 8. **View renaming via `SetName2`** — the views must be named `front`,
    `top`, `right`, `iso`, `section_A` in the tree; projected-view
    selection (`SelectByID2(..., "DRAWINGVIEW", ...)`) depends on it.

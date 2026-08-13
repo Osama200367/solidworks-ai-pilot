@@ -89,6 +89,8 @@ SW_DIM_TEXT_PREFIX = 1
 SW_DIM_TEXT_CALLOUT_BELOW = 4
 # swconst.swCustomInfoType_e
 SW_CUSTOM_INFO_TEXT = 30
+# swconst.swCustomPropertyAddOption_e: delete-and-add = overwrite existing
+SW_CUSTOM_PROP_DELETE_AND_ADD = 1
 # The default drawing template names its sheet "Sheet1"; used to return
 # focus to the sheet after view-activated sketching.
 SW_SHEET1 = "Sheet1"
@@ -189,6 +191,16 @@ def new_part_calls(template: str = "<default part template>") -> list[CallSpec]:
     return [get_default_part_template(), new_document(template)]
 
 
+def new_assembly_document(template: str) -> CallSpec:
+    return CallSpec(
+        target="App",
+        method="NewDocument",
+        args=(template, 0, 0.0, 0.0),
+        check="non_null",
+        note="create new assembly document from template",
+    )
+
+
 def new_assembly_calls(template: str = "<default assembly template>") -> list[CallSpec]:
     """The call plan for ``new_assembly`` (template resolution like new_part)."""
     return [
@@ -198,13 +210,7 @@ def new_assembly_calls(template: str = "<default assembly template>") -> list[Ca
             args=(SW_DEFAULT_TEMPLATE_ASSEMBLY,),
             note="resolve default assembly template path (swDefaultTemplateAssembly)",
         ),
-        CallSpec(
-            target="App",
-            method="NewDocument",
-            args=(template, 0, 0.0, 0.0),
-            check="non_null",
-            note="create new assembly document from template",
-        ),
+        new_assembly_document(template),
     ]
 
 
@@ -1052,14 +1058,18 @@ def custom_property_calls(properties: list[tuple[str, str]]) -> list[CallSpec]:
     """Title-block custom properties, set on the *model* document.
 
     Standard SolidWorks sheet formats display these via $PRPSHEET links.
-    AddCustomInfo3 returns False when the field already exists — harmless
-    for fresh in-session documents, hence check="none".
+    ICustomPropertyManager::Add3 with swCustomPropertyDeleteAndAdd
+    OVERWRITES existing values (AddCustomInfo3 would silently keep stale
+    ones when a template pre-defines the field or a second drawing of the
+    same model updates the metadata). Add3 returns swCustomInfoAddResult_e
+    where 0 = AddedOrChanged — hence check="status_zero".
     """
     return [
         CallSpec(
-            target="Model",
-            method="AddCustomInfo3",
-            args=("", name, SW_CUSTOM_INFO_TEXT, value),
+            target="CustomPropertyManager",
+            method="Add3",
+            args=(name, SW_CUSTOM_INFO_TEXT, value, SW_CUSTOM_PROP_DELETE_AND_ADD),
+            check="status_zero",
             note=f"custom property {name} = {value!r} (title block via $PRPSHEET)",
         )
         for name, value in properties
@@ -1164,14 +1174,19 @@ def section_view_calls(
     label: str,
     position_mm: tuple[float, float],
     name: str,
+    sheet_name: str = SW_SHEET1,
 ) -> list[CallSpec]:
     """A full section: cutting-line sketch in the activated parent view,
     then CreateSectionViewAt5.
 
-    The riskiest sequence of the phase: the line is sketched with the
-    parent view activated (coordinates in sheet space — a Windows-
-    verified assumption), stays selected, and the section call consumes
-    it. Focus returns to the sheet afterwards.
+    The riskiest sequence of the phase. The line is sketched with the
+    parent view ACTIVATED, so its coordinates are the view's own sketch
+    space — model-scale mm relative to the view origin (the projection
+    of the model origin), matching the official CreateSectionViewAt5
+    example — while the placement point stays in absolute sheet space.
+    The line stays selected and the section call consumes it; focus then
+    returns to the sheet. Divergence note: the mock logs the default
+    sheet name; the COM backend passes the live one.
     """
     x1, y1, x2, y2 = line_mm
     px, py = position_mm
@@ -1194,7 +1209,8 @@ def section_view_calls(
             method="CreateLine",
             args=(x1 * MM_TO_M, y1 * MM_TO_M, 0.0, x2 * MM_TO_M, y2 * MM_TO_M, 0.0),
             check="non_null",
-            note="cutting line through the model center (sheet coordinates)",
+            note="cutting line through the model center (parent-view sketch "
+            "coordinates: model scale, origin = projected model origin)",
         ),
         # IDrawingDoc::CreateSectionViewAt5(x, y, z, SectionLabel,
         #   Options, ExcludedComponents, SectionDepth) -> IView.
@@ -1218,8 +1234,11 @@ def section_view_calls(
         CallSpec(
             target="Model",
             method="ActivateSheet",
-            args=(SW_SHEET1,),
-            note="return focus from the view to the sheet (default sheet name)",
+            args=(sheet_name,),
+            check="truthy",
+            note=f"return focus from the view to sheet '{sheet_name}' — a "
+            "silent failure here would leave later annotation picks in "
+            "view coordinates",
         ),
         CallSpec(
             target="Model",

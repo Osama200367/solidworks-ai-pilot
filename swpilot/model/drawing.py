@@ -8,19 +8,21 @@ attachment is a model point projected through the view into exact sheet
 coordinates for ``SelectByID2`` — the same closed-form-pick discipline
 the part and assembly twins use.
 
-View image conventions (third angle; first angle flips the z signs and
-the placement sides):
+View image conventions (identical in third and first angle — the
+projection standard changes only view PLACEMENT, never an individual
+view's image):
 
 * front view: (u, v) = (x, y)
-* top view (above front): (x, -z)
-* right view (right of front): (-z, y)
+* top view: (x, -z) — above the front in third angle, below in first
+* right view: (-z, y) — right of the front in third angle, left in first
 
 Sections are always placed past the right edge (vertical cutting line)
 or past the top edge (horizontal line) of the existing views, in both
-projections — SolidWorks orients the section arrows to match the
-sheet's projection angle, so the section image reuses the right/top
-view mapping of the active convention. That arrow-orientation rule is
-an assumption only a Windows smoke test can confirm (WINDOWS_SETUP.md).
+projections. Their image DOES depend on the projection standard,
+because SolidWorks orients the section arrows to match the sheet's
+projection angle (a first-angle section placed right is viewed from the
+left). That arrow-orientation rule is an assumption only a Windows
+smoke test can confirm (WINDOWS_SETUP.md).
 """
 
 from __future__ import annotations
@@ -43,8 +45,9 @@ TITLE_BLOCK_HEIGHT = 40.0
 VIEW_GAP = 30.0
 # Dimension band reserved around each view.
 DIM_BAND = 14.0
-# Note stack reserved under the front view.
-NOTES_BAND = 18.0
+# Note stack reserved under the front view (first line starts 10 mm
+# into the band; 4 lines fit).
+NOTES_BAND = 30.0
 NOTE_LINE = 6.0
 # Standard drawing scale series, largest first.
 STANDARD_SCALES: list[tuple[int, int]] = [
@@ -499,19 +502,32 @@ class DrawingTracker:
         self._section_n += 1
         margin = 4.0
         if orientation == "vertical":
-            line = (
+            sheet_line = (
                 p.center[0],
                 p.center[1] - p.size[1] / 2.0 - margin,
                 p.center[0],
                 p.center[1] + p.size[1] / 2.0 + margin,
             )
         else:
-            line = (
+            sheet_line = (
                 p.center[0] - p.size[0] / 2.0 - margin,
                 p.center[1],
                 p.center[0] + p.size[0] / 2.0 + margin,
                 p.center[1],
             )
+        # The cutting line is sketched with the parent view ACTIVATED, so
+        # its coordinates are parent-view sketch space: model-scale mm
+        # relative to the view's sketch origin (the projection of the
+        # model origin), NOT absolute sheet space — the official
+        # CreateSectionViewAt5 example sketches its line at negative
+        # coordinates while the placement point stays in sheet range.
+        ox, oy = self.sheet_point(parent, (0.0, 0.0, 0.0))
+        line = (
+            (sheet_line[0] - ox) / p.scale,
+            (sheet_line[1] - oy) / p.scale,
+            (sheet_line[2] - ox) / p.scale,
+            (sheet_line[3] - oy) / p.scale,
+        )
         return SectionSpec(
             name=name, parent=parent, label=label, line=line, position=rec.center
         )
@@ -519,19 +535,28 @@ class DrawingTracker:
     # -- dimension support ---------------------------------------------
 
     def project(self, view: ViewRec, p: Vec3) -> Point2:
-        """View-image coordinates (unscaled model mm) of a world point."""
+        """View-image coordinates (unscaled model mm) of a world point.
+
+        First- vs third-angle changes only where views are PLACED, never
+        an individual view's image: the top view is (x, -z) and the right
+        view (-z, y) under both conventions (the unfolding hinge and the
+        flipped plane cancel).
+        """
         x, y, z = p
         first = self.projection == "first"
         k = view.kind
         if k in ("front", "iso"):
             return (x, y)
         if k == "top":
-            return (x, z) if first else (x, -z)
+            return (x, -z)
         if k == "right":
-            return (z, y) if first else (-z, y)
+            return (-z, y)
         assert k == "section"
-        # Same image as the right/top view of the active projection angle
-        # (sections are placed on the corresponding side).
+        # Sections are placed right (vertical line) / above (horizontal).
+        # Assumption pending Windows verification: SolidWorks orients the
+        # section arrows per the sheet's projection angle, so a first-
+        # angle section placed right is viewed from the LEFT (+z image)
+        # and one placed above is viewed from BELOW (+z image).
         if view.orientation == "vertical":
             return (z, y) if first else (-z, y)
         return (x, z) if first else (x, -z)

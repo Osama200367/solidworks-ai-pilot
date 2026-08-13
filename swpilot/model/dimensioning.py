@@ -63,6 +63,7 @@ class _TurnedProfile:
     intervals: list[tuple[float, float, float]]  # (n0, n1, radius) along the normal
     bore_radius: float | None  # concentric through-bore, if any
     bore_span: tuple[float, float] | None
+    bore_feature: str | None  # the cut feature the turned flow dimensions
 
 
 def analyze(
@@ -81,6 +82,8 @@ class _Analyzer:
         self.warnings: list[str] = []
         self._below_i: dict[str, int] = {}  # per-view stagger counters
         self._left_i: dict[str, int] = {}
+        self._right_i: dict[str, int] = {}
+        self._note_i: dict[str, int] = {}  # per-view note-line counters
 
     # -- placement helpers ---------------------------------------------
 
@@ -104,12 +107,26 @@ class _Analyzer:
         self.dims.append(dim)
 
     def _note_lines(self, view: ViewRec, lines: list[str]) -> None:
-        from swpilot.model.drawing import NOTE_LINE
+        from swpilot.model.drawing import NOTE_LINE, NOTES_BAND
 
+        # Successive note blocks for one view continue the stack instead
+        # of restarting at y0 (which would print them on top of each
+        # other) — same counter discipline as _below/_left.
+        base = self._note_i.get(view.name, 0)
         x = view.center[0] - view.size[0] / 2.0
         y0 = view.center[1] - view.size[1] / 2.0 - DIM_OFFSET - 2 * DIM_STAGGER - 4.0
         for i, text in enumerate(lines):
-            self.notes.append(NoteSpec(text=text, position=(x, y0 - i * NOTE_LINE)))
+            self.notes.append(
+                NoteSpec(text=text, position=(x, y0 - (base + i) * NOTE_LINE))
+            )
+        self._note_i[view.name] = base + len(lines)
+        capacity = int((NOTES_BAND - 10.0) // NOTE_LINE) + 1
+        if self._note_i[view.name] > capacity:
+            self._warn(
+                f"smart_dimensions: {self._note_i[view.name]} note lines under "
+                f"view {view.name!r} exceed the reserved band ({capacity} fit); "
+                "the extra lines run into the sheet margin"
+            )
 
     # -- part analysis -------------------------------------------------
 
@@ -180,9 +197,45 @@ class _Analyzer:
                     value=rect.height,
                 )
             )
-        depth = base.depth_mm or 0.0
-        s = base.direction_sign
-        n0, n1 = sorted((0.0, s * depth))
+        # Full merged material extent along the family normal — the base
+        # boss's own span alone would drop its sketch-plane offset and
+        # understate stacked bosses.
+        interval = model.material_interval(family)  # type: ignore[arg-type]
+        assert interval is not None  # the base boss is in this family
+        n0, n1 = interval
+        spans = sorted(model.material_intervals(family))  # type: ignore[arg-type]
+        for (_, hi_a), (lo_b, _) in zip(spans, spans[1:], strict=False):
+            if lo_b - hi_a > EPS:
+                self._warn(
+                    "smart_dimensions: the thickness dimension spans a gap "
+                    f"between disjoint bosses ([{hi_a}, {lo_b}] mm is empty); "
+                    "verify the overall value is what the sheet should carry"
+                )
+                break
+        # The cap-plane picks sit at the base rect's center; if the boss
+        # forming an extreme cap has a different footprint that misses that
+        # point, the pick would land off the drawn cap line.
+        probe = g.Circle(rect.cx, rect.cy, 2.0 * EPS)
+        for n in (n0, n1):
+            capped = False
+            for b in (f for f in model.features if f.kind == "boss"):
+                assert b.sketch is not None
+                if b.sketch.frame.family != family:
+                    continue
+                o = b.sketch.frame.offset
+                d = b.depth_mm or 0.0
+                blo, bhi = sorted((o, o + b.direction_sign * d))
+                if (abs(blo - n) <= EPS or abs(bhi - n) <= EPS) and any(
+                    g.contains(e, probe) for e in b.sketch.entities
+                ):
+                    capped = True
+                    break
+            if not capped:
+                self._warn(
+                    f"smart_dimensions: thickness pick at the {n} mm cap plane "
+                    "may miss the drawn cap line (no boss face there covers "
+                    "the base rectangle's center)"
+                )
         self._normal_extent_dim(
             "thickness", family, n0, n1, frame.to_world(rect.cx, rect.cy), (rect.cy, rect.cy)
         )
@@ -265,6 +318,7 @@ class _Analyzer:
         intervals.sort()
         bore_r: float | None = None
         bore_span: tuple[float, float] | None = None
+        bore_feature: str | None = None
         for f in model.features:
             if f.kind != "cut" or f.sketch is None:
                 continue
@@ -281,19 +335,44 @@ class _Analyzer:
             if bore_r is None or c2.r < bore_r:
                 bore_r = c2.r
                 bore_span = span
+                bore_feature = f.name
         return _TurnedProfile(
             family=family,
             center=center,
             intervals=intervals,
             bore_radius=bore_r,
             bore_span=bore_span,
+            bore_feature=bore_feature,
         )
 
-    def _section_view(self) -> ViewRec | None:
+    # Which section orientations keep a family's normal axis in-image
+    # (a section that collapses the turned axis cannot carry length dims):
+    # front-family parts keep z in both images; right-family (axis x) only
+    # in horizontal images (x, +-z); top-family (axis y) only in vertical
+    # images (-+z, y).
+    _USABLE_SECTIONS: dict[str, tuple[str, ...]] = {
+        "front": ("vertical", "horizontal"),
+        "right": ("horizontal",),
+        "top": ("vertical",),
+    }
+
+    def _usable_section(self, family: str) -> ViewRec | None:
         for name in self.d.view_order:
-            if self.d.views[name].kind == "section":
-                return self.d.views[name]
+            v = self.d.views[name]
+            if v.kind == "section" and v.orientation in self._USABLE_SECTIONS[family]:
+                return v
         return None
+
+    def _has_section(self) -> bool:
+        return any(v.kind == "section" for v in self.d.views.values())
+
+    def _right(self, view: ViewRec) -> tuple[float, float]:
+        i = self._right_i.get(view.name, 0)
+        self._right_i[view.name] = i + 1
+        return (
+            view.center[0] + view.size[0] / 2.0 + DIM_OFFSET + DIM_STAGGER * i,
+            view.center[1],
+        )
 
     def _turned_envelope(self, t: _TurnedProfile) -> None:
         from swpilot.model.planes import standard_frame
@@ -324,13 +403,13 @@ class _Analyzer:
                     )
                 )
 
-        sec = self._section_view()
+        sec = self._usable_section(t.family)
         n_lo = min(n0 for n0, _, _ in t.intervals)
         n_hi = max(n1 for _, n1, _ in t.intervals)
         rb = t.bore_radius or 0.0
 
         def ring_mid(n: float) -> float:
-            """v pick inside the material ring of the face plane at n.
+            """Radial offset (from the axis) into the face ring at plane n.
 
             End faces span bore-to-outer; a step face at an internal
             boundary is the annulus between the two adjacent radii.
@@ -341,11 +420,22 @@ class _Analyzer:
                 if abs(n0 - n) <= EPS or abs(n1 - n) <= EPS
             ]
             if len(touching) >= 2 and max(touching) - min(touching) > EPS:
-                return cy + (min(touching) + max(touching)) / 2.0
+                return (min(touching) + max(touching)) / 2.0
             outer = max(touching) if touching else max(r for _, _, r in t.intervals)
-            return cy + (rb + outer) / 2.0
+            return (rb + outer) / 2.0
 
         if sec is not None:
+            # Vertical sections keep the sketch v axis in-image, horizontal
+            # ones keep u — radial picks must vary the surviving axis or
+            # both picks collapse to the same sheet point.
+            radial_v = sec.orientation == "vertical"
+
+            def rad_pick(offset: float, n: float) -> Vec3:
+                if radial_v:
+                    return frame.to_world(cx, cy + offset, n)
+                return frame.to_world(cx + offset, cy, n)
+
+            axis_placement = self._below(sec) if radial_v else self._right(sec)
             # Overall length between the two end-face lines of the section
             # profile, then one datum dim per internal step boundary.
             boundaries = sorted({n for n0, n1, _ in t.intervals for n in (n0, n1)})
@@ -356,10 +446,10 @@ class _Analyzer:
                     view=sec.name,
                     kind="linear",
                     picks=[
-                        self.d.sheet_point(sec.name, frame.to_world(cx, ring_mid(n_lo), n_lo)),
-                        self.d.sheet_point(sec.name, frame.to_world(cx, ring_mid(n_hi), n_hi)),
+                        self.d.sheet_point(sec.name, rad_pick(ring_mid(n_lo), n_lo)),
+                        self.d.sheet_point(sec.name, rad_pick(ring_mid(n_hi), n_hi)),
                     ],
-                    placement=self._below(sec),
+                    placement=axis_placement,
                     value=n_hi - n_lo,
                 )
             )
@@ -370,12 +460,10 @@ class _Analyzer:
                         view=sec.name,
                         kind="linear",
                         picks=[
-                            self.d.sheet_point(
-                                sec.name, frame.to_world(cx, ring_mid(n_lo), n_lo)
-                            ),
-                            self.d.sheet_point(sec.name, frame.to_world(cx, ring_mid(n), n)),
+                            self.d.sheet_point(sec.name, rad_pick(ring_mid(n_lo), n_lo)),
+                            self.d.sheet_point(sec.name, rad_pick(ring_mid(n), n)),
                         ],
-                        placement=self._below(sec),
+                        placement=self._below(sec) if radial_v else self._right(sec),
                         value=n - n_lo,
                     )
                 )
@@ -386,32 +474,40 @@ class _Analyzer:
                 )
             if t.bore_radius is not None and t.bore_span is not None:
                 z_mid = (t.bore_span[0] + t.bore_span[1]) / 2.0
-                p_top = frame.to_world(cx, cy + t.bore_radius, z_mid)
-                p_bot = frame.to_world(cx, cy - t.bore_radius, z_mid)
-                sp = self.d.sheet_point(sec.name, p_top)
+                p_a = rad_pick(t.bore_radius, z_mid)
+                p_b = rad_pick(-t.bore_radius, z_mid)
                 self._add(
                     DimSpec(
                         name="bore",
                         view=sec.name,
                         kind="linear",
-                        picks=[sp, self.d.sheet_point(sec.name, p_bot)],
-                        placement=(
-                            sec.center[0] + sec.size[0] / 2.0 + DIM_OFFSET,
-                            sec.center[1],
-                        ),
+                        picks=[
+                            self.d.sheet_point(sec.name, p_a),
+                            self.d.sheet_point(sec.name, p_b),
+                        ],
+                        placement=self._right(sec) if radial_v else self._below(sec),
                         value=2.0 * t.bore_radius,
                         prefix="<MOD-DIAM>",
                     )
                 )
         else:
-            self._warn(
-                "smart_dimensions: no section view — the bore and length are "
-                "dimensioned on outside views; add section_view for a "
-                "machinist-preferred sheet"
-            )
+            if self._has_section():
+                need = " or ".join(self._USABLE_SECTIONS[t.family])
+                self._warn(
+                    "smart_dimensions: the existing section collapses the "
+                    f"turned axis (family {t.family!r} needs a {need} cutting "
+                    "line); length and bore fall back to outside views"
+                )
+            else:
+                self._warn(
+                    "smart_dimensions: no section view — the bore and length are "
+                    "dimensioned on outside views; add section_view for a "
+                    "machinist-preferred sheet"
+                )
             self._normal_extent_dim(
                 "length", t.family, n_lo, n_hi,
-                frame.to_world(cx, cy), (ring_mid(n_lo), ring_mid(n_hi)),
+                frame.to_world(cx, cy),
+                (cy + ring_mid(n_lo), cy + ring_mid(n_hi)),
             )
             if t.bore_radius is not None and tv is not None:
                 a = math.radians(225.0)
@@ -498,8 +594,13 @@ class _Analyzer:
                 for fb in holes:
                     if fb is fa or fb.through_all or fb.name in consumed:
                         continue
-                    ca, cb = centers(fa), centers(fb)
                     assert fa.sketch is not None and fb.sketch is not None
+                    if fb.sketch.frame.family != fa.sketch.frame.family:
+                        # Same sketch coordinates on different plane
+                        # families are different world locations — pairing
+                        # them would fabricate a counterbore callout.
+                        continue
+                    ca, cb = centers(fa), centers(fb)
                     ra = max(e.r for e in fa.sketch.entities if isinstance(e, g.Circle))
                     rbm = min(e.r for e in fb.sketch.entities if isinstance(e, g.Circle))
                     if ca == cb and rbm > ra:
@@ -513,13 +614,11 @@ class _Analyzer:
             assert f.sketch is not None
             family = f.sketch.frame.family
             circles = [e for e in f.sketch.entities if isinstance(e, g.Circle)]
-            if turned is not None and len(circles) == 1:
-                c = circles[0]
-                if (
-                    abs(c.cx - turned.center[0]) <= EPS
-                    and abs(c.cy - turned.center[1]) <= EPS
-                ):
-                    continue  # the bore; dimensioned by the turned flow
+            if turned is not None and f.name == turned.bore_feature:
+                # Exactly the feature the turned flow dimensions as the
+                # bore — never a cross-drilled hole on another family
+                # (which shares sketch coordinates but not world position).
+                continue
             tv = self._view(TRUE_VIEW[family])
             if tv is None:
                 self._warn(

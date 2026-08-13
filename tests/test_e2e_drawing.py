@@ -58,17 +58,17 @@ class TestFlangeSheet:
 
     def test_title_block_properties_on_model(self) -> None:
         _, backend = run_example("flange_drawing.json")
-        props = [c.args for c in backend.call_log if c.method == "AddCustomInfo3"]
-        assert props == [
-            ("", "Description", 30, "HOLLOW FLANGE"),
-            ("", "DrawnBy", 30, "SW-Pilot"),
-            ("", "DrawnDate", 30, "2026-08-13"),
+        props = [c for c in backend.call_log if c.method == "Add3"]
+        assert [c.args for c in props] == [
+            ("Description", 30, "HOLLOW FLANGE", 1),  # 1 = delete-and-add
+            ("DrawnBy", 30, "SW-Pilot", 1),
+            ("DrawnDate", 30, "2026-08-13", 1),
         ]
+        assert all(c.target == "CustomPropertyManager" for c in props)
+        assert all(c.check == "status_zero" for c in props)  # 0 = AddedOrChanged
         # set BEFORE the drawing document exists (they target the model)
         methods = [c.method for c in backend.call_log]
-        assert methods.index("AddCustomInfo3") < methods.index(
-            "CreateDrawViewFromModelView3"
-        )
+        assert methods.index("Add3") < methods.index("CreateDrawViewFromModelView3")
 
     def test_sheet_setup(self) -> None:
         _, backend = run_example("flange_drawing.json")

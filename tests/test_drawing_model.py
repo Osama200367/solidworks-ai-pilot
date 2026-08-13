@@ -135,19 +135,19 @@ class TestFirstAngleLayout:
         assert top.center[1] < front.center[1]  # top BELOW front
         assert right.center[0] < front.center[0]  # right LEFT of front
 
-    def test_projection_mapping_flips_z(self) -> None:
+    def test_view_images_are_projection_invariant(self) -> None:
+        # First vs third angle changes only view PLACEMENT; the image of
+        # an individual view is identical under both conventions (v0.4
+        # review finding: flipping z here mirrored every first-angle pick).
         d3 = make_drawing()
         d1 = make_drawing(projection="first")
         for d in (d3, d1):
             d.standard_views(["front", "top", "right"])
         p = (10.0, 20.0, 5.0)
-        # front image identical
-        assert d3.project(d3.views["front"], p) == d1.project(d1.views["front"], p)
-        # top/right flip the z sign between conventions
+        for view in ("front", "top", "right"):
+            assert d3.project(d3.views[view], p) == d1.project(d1.views[view], p)
         assert d3.project(d3.views["top"], p) == (10.0, -5.0)
-        assert d1.project(d1.views["top"], p) == (10.0, 5.0)
         assert d3.project(d3.views["right"], p) == (-5.0, 20.0)
-        assert d1.project(d1.views["right"], p) == (5.0, 20.0)
 
 
 class TestFitValidation:
@@ -192,10 +192,14 @@ class TestSectionView:
         assert spec.label == "A"
         assert spec.name == "section_A"
         front = d.views["front"]
-        # cutting line: vertical through the front view center
+        # The cutting line is in PARENT-VIEW sketch coordinates (model
+        # scale, origin = the projection of the model origin): a vertical
+        # line through the plate's center, taller than the 80mm plate.
         x1, y1, x2, y2 = spec.line
-        assert x1 == x2 == front.center[0]
-        assert y2 - y1 > front.size[1]
+        ox, oy = d.sheet_point("front", (0.0, 0.0, 0.0))
+        assert x1 == x2 == pytest.approx((front.center[0] - ox) / front.scale)
+        assert y2 - y1 == pytest.approx((front.size[1] + 8.0) / front.scale)
+        assert y1 == pytest.approx(-y2)  # centered on the model
         # placed to the right of everything in third angle
         assert spec.position[0] > d.views["right"].center[0]
         assert spec.position[1] == front.center[1]

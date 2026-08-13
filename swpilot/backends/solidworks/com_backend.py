@@ -62,7 +62,6 @@ class SolidWorksBackend(Backend):
         self._documents: dict[str, Any] = {}  # logical name -> model handle
         self._titles: dict[str, str] = {}  # logical name -> window title
         self._components: dict[str, Any] = {}  # instance name -> IComponent2
-        self._saved_paths: set[str] = set()  # normcase abs paths saved this run
 
     # -- CallSpec execution --------------------------------------------
 
@@ -100,6 +99,16 @@ class SolidWorksBackend(Backend):
             obj = self._model.GetCurrentSheet()
             if obj is None:
                 raise BackendError("internal error: the drawing has no current sheet")
+        elif root_name == "CustomPropertyManager":
+            if self._model is None:
+                raise BackendError(f"internal error: no open model for call target {target!r}")
+            # Parameterized property: the empty string selects the
+            # document-level (configuration-independent) property set.
+            obj = self._model.Extension.CustomPropertyManager("")
+            if obj is None:
+                raise BackendError(
+                    "internal error: the document returned no custom property manager"
+                )
         elif root_name.startswith("Component:") or (
             root_name == "Component" and rest
         ):
@@ -234,7 +243,7 @@ class SolidWorksBackend(Backend):
                     "set one in Tools > Options > Default Templates, or set "
                     "SWPILOT_ASSEMBLY_TEMPLATE"
                 )
-        model = self._execute(calls.new_document(str(template)))
+        model = self._execute(calls.new_assembly_document(str(template)))
         self._register_document(name, model)
 
     def _current_title(self, name: str) -> str:
@@ -270,10 +279,13 @@ class SolidWorksBackend(Backend):
     ) -> None:
         self._require_model("insert_component")
         abs_path = os.path.abspath(path)
-        if os.path.normcase(abs_path) not in self._saved_paths:
+        if external:
             # External file: AddComponent5 needs the document open in the
             # session. Load it, then re-activate the assembly (OpenDoc6
-            # makes the opened part active).
+            # makes the opened part active). Gated on the schema-level
+            # `external` flag — the same predicate the mock logs from —
+            # so the two call plans cannot diverge structurally; OpenDoc6
+            # on an already-open file harmlessly returns the open document.
             self._execute_all(calls.open_external_part_calls(abs_path))
             assert self._active_doc is not None
             (reactivate,) = calls.activate_document_calls(
@@ -308,7 +320,6 @@ class SolidWorksBackend(Backend):
         self._require_model("save_assembly")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_assembly_calls(abs_path))
-        self._saved_paths.add(os.path.normcase(abs_path))
         if self._active_doc is not None:
             self._current_title(self._active_doc)  # refresh: saving retitles
 
@@ -404,7 +415,6 @@ class SolidWorksBackend(Backend):
         self._require_model("save_part")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_part_calls(abs_path))
-        self._saved_paths.add(os.path.normcase(abs_path))
         if self._active_doc is not None:
             self._current_title(self._active_doc)  # refresh: saving retitles
 
@@ -465,11 +475,29 @@ class SolidWorksBackend(Backend):
                     calls.projected_view_calls(v.parent, v.position, v.name)
                 )
 
+    def _live_sheet_name(self) -> str:
+        """The current sheet's real name (templates may not use 'Sheet1')."""
+        try:
+            sheet = self._model.GetCurrentSheet()
+            raw = sheet.GetName
+            name = raw() if callable(raw) else raw
+            return str(name) if name else calls.SW_SHEET1
+        except Exception:
+            return calls.SW_SHEET1
+
     def add_section_view(self, spec: SectionSpec) -> None:
         self._require_model("add_section_view")
+        # Resolve the sheet name while the model is still in sheet mode:
+        # a wrong name would make ActivateSheet fail and strand later
+        # annotation picks in view coordinates.
         self._execute_all(
             calls.section_view_calls(
-                spec.parent, spec.line, spec.label, spec.position, spec.name
+                spec.parent,
+                spec.line,
+                spec.label,
+                spec.position,
+                spec.name,
+                sheet_name=self._live_sheet_name(),
             )
         )
 
@@ -492,7 +520,6 @@ class SolidWorksBackend(Backend):
         self._require_model("save_drawing")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_drawing_calls(abs_path))
-        self._saved_paths.add(os.path.normcase(abs_path))
         if self._active_doc is not None:
             self._current_title(self._active_doc)  # refresh: saving retitles
 

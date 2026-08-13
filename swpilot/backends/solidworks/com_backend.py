@@ -18,6 +18,7 @@ from typing import Any
 from swpilot.backends import calls
 from swpilot.backends.base import Backend, BackendError, Vec3
 from swpilot.backends.calls import CallSpec
+from swpilot.model.drawing import DimSpec, DrawingSetup, NoteSpec, SectionSpec, ViewSpec
 
 try:
     import win32com.client  # noqa: F401
@@ -57,10 +58,10 @@ class SolidWorksBackend(Backend):
         self._last_feature: Any = None
         self._part_template = part_template or os.environ.get("SWPILOT_PART_TEMPLATE")
         self._assembly_template = os.environ.get("SWPILOT_ASSEMBLY_TEMPLATE")
+        self._drawing_template = os.environ.get("SWPILOT_DRAWING_TEMPLATE")
         self._documents: dict[str, Any] = {}  # logical name -> model handle
         self._titles: dict[str, str] = {}  # logical name -> window title
         self._components: dict[str, Any] = {}  # instance name -> IComponent2
-        self._saved_paths: set[str] = set()  # normcase abs paths saved this run
 
     # -- CallSpec execution --------------------------------------------
 
@@ -81,6 +82,32 @@ class SolidWorksBackend(Backend):
             if obj is None:
                 raise BackendError(
                     "internal error: no feature available to rename (LastFeature)"
+                )
+        elif root_name == "LastFeatureAnnotation":
+            if self._last_feature is None:
+                raise BackendError(
+                    "internal error: no annotation available (LastFeatureAnnotation)"
+                )
+            obj = self._last_feature.GetAnnotation()
+            if obj is None:
+                raise BackendError(
+                    "internal error: the last annotation object returned no IAnnotation"
+                )
+        elif root_name == "Sheet":
+            if self._model is None:
+                raise BackendError(f"internal error: no open model for call target {target!r}")
+            obj = self._model.GetCurrentSheet()
+            if obj is None:
+                raise BackendError("internal error: the drawing has no current sheet")
+        elif root_name == "CustomPropertyManager":
+            if self._model is None:
+                raise BackendError(f"internal error: no open model for call target {target!r}")
+            # Parameterized property: the empty string selects the
+            # document-level (configuration-independent) property set.
+            obj = self._model.Extension.CustomPropertyManager("")
+            if obj is None:
+                raise BackendError(
+                    "internal error: the document returned no custom property manager"
                 )
         elif root_name.startswith("Component:") or (
             root_name == "Component" and rest
@@ -164,12 +191,20 @@ class SolidWorksBackend(Backend):
             )
         if spec.remember:
             self._last_feature = result
-        if spec.target == "LastFeature":
+        if spec.target == "LastFeature" and spec.method in ("Name", "Name2", "SetName2"):
+            # A rename ends the object's LastFeature lifetime, so later
+            # remember=False creators fall back to FeatureByPositionReverse.
+            # Non-rename LastFeature specs (ScaleDecimal, SetText) keep it
+            # alive — renames are always last in each builder's sequence.
             self._last_feature = None
         self.call_log.append(spec)
         return result
 
     def _execute_all(self, specs: list[CallSpec]) -> None:
+        # Each builder sequence is self-contained: a stale remembered object
+        # from an earlier batch (e.g. a DisplayDimension with no trailing
+        # rename) must never satisfy this batch's LastFeature lookup.
+        self._last_feature = None
         for spec in specs:
             self._execute(spec)
 
@@ -208,7 +243,7 @@ class SolidWorksBackend(Backend):
                     "set one in Tools > Options > Default Templates, or set "
                     "SWPILOT_ASSEMBLY_TEMPLATE"
                 )
-        model = self._execute(calls.new_document(str(template)))
+        model = self._execute(calls.new_assembly_document(str(template)))
         self._register_document(name, model)
 
     def _current_title(self, name: str) -> str:
@@ -244,10 +279,13 @@ class SolidWorksBackend(Backend):
     ) -> None:
         self._require_model("insert_component")
         abs_path = os.path.abspath(path)
-        if os.path.normcase(abs_path) not in self._saved_paths:
+        if external:
             # External file: AddComponent5 needs the document open in the
             # session. Load it, then re-activate the assembly (OpenDoc6
-            # makes the opened part active).
+            # makes the opened part active). Gated on the schema-level
+            # `external` flag — the same predicate the mock logs from —
+            # so the two call plans cannot diverge structurally; OpenDoc6
+            # on an already-open file harmlessly returns the open document.
             self._execute_all(calls.open_external_part_calls(abs_path))
             assert self._active_doc is not None
             (reactivate,) = calls.activate_document_calls(
@@ -282,7 +320,6 @@ class SolidWorksBackend(Backend):
         self._require_model("save_assembly")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_assembly_calls(abs_path))
-        self._saved_paths.add(os.path.normcase(abs_path))
         if self._active_doc is not None:
             self._current_title(self._active_doc)  # refresh: saving retitles
 
@@ -378,7 +415,111 @@ class SolidWorksBackend(Backend):
         self._require_model("save_part")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_part_calls(abs_path))
-        self._saved_paths.add(os.path.normcase(abs_path))
+        if self._active_doc is not None:
+            self._current_title(self._active_doc)  # refresh: saving retitles
+
+    # -- drawing operations (v0.4) -------------------------------------
+
+    def create_drawing(self, setup: DrawingSetup) -> None:
+        # Title-block custom properties live on the model document.
+        if self._active_doc != setup.model_doc:
+            title = self._current_title(setup.model_doc)
+            (spec,) = calls.activate_document_calls(title)
+            self._model = self._execute(spec)
+            self._documents[setup.model_doc] = self._model
+            self._active_doc = setup.model_doc
+        self._require_model("create_drawing")
+        self._execute_all(calls.custom_property_calls(setup.properties))
+        template = self._drawing_template
+        if template is None:
+            template = self._execute(calls.get_default_drawing_template())
+            if not template:
+                raise BackendError(
+                    "create_drawing: SolidWorks returned no default drawing template; "
+                    "set one in Tools > Options > Default Templates, or set "
+                    "SWPILOT_DRAWING_TEMPLATE"
+                )
+        model = self._execute(calls.new_drawing_document(str(template), setup.sheet))
+        self._register_document(setup.name, model)
+        self._execute_all(
+            calls.setup_sheet_calls(
+                setup.sheet,
+                setup.scale[0],
+                setup.scale[1],
+                setup.first_angle,
+                setup.paper_w,
+                setup.paper_h,
+            )
+        )
+        self._execute_all(
+            calls.note_calls(setup.units_note_text, setup.units_note_position)
+        )
+
+    def add_views(self, views: list[ViewSpec]) -> None:
+        self._require_model("add_views")
+        for v in views:
+            if v.method == "model":
+                assert v.model_path is not None and v.orientation is not None
+                self._execute_all(
+                    calls.model_view_calls(
+                        os.path.abspath(v.model_path),
+                        v.orientation,
+                        v.position,
+                        v.name,
+                        v.scale,
+                    )
+                )
+            else:
+                assert v.parent is not None
+                self._execute_all(
+                    calls.projected_view_calls(v.parent, v.position, v.name)
+                )
+
+    def _live_sheet_name(self) -> str:
+        """The current sheet's real name (templates may not use 'Sheet1')."""
+        try:
+            sheet = self._model.GetCurrentSheet()
+            raw = sheet.GetName
+            name = raw() if callable(raw) else raw
+            return str(name) if name else calls.SW_SHEET1
+        except Exception:
+            return calls.SW_SHEET1
+
+    def add_section_view(self, spec: SectionSpec) -> None:
+        self._require_model("add_section_view")
+        # Resolve the sheet name while the model is still in sheet mode:
+        # a wrong name would make ActivateSheet fail and strand later
+        # annotation picks in view coordinates.
+        self._execute_all(
+            calls.section_view_calls(
+                spec.parent,
+                spec.line,
+                spec.label,
+                spec.position,
+                spec.name,
+                sheet_name=self._live_sheet_name(),
+            )
+        )
+
+    def add_annotations(self, dims: list[DimSpec], notes: list[NoteSpec]) -> None:
+        self._require_model("add_annotations")
+        for d in dims:
+            self._execute_all(
+                calls.dimension_calls(
+                    d.picks,
+                    d.placement,
+                    d.prefix,
+                    d.below,
+                    f"{d.kind} dimension '{d.name}' = {d.value:g} mm in view '{d.view}'",
+                )
+            )
+        for n in notes:
+            self._execute_all(calls.note_calls(n.text, n.position))
+
+    def save_drawing(self, path: str) -> None:
+        self._require_model("save_drawing")
+        abs_path = os.path.abspath(path)
+        self._execute_all(calls.save_drawing_calls(abs_path))
         if self._active_doc is not None:
             self._current_title(self._active_doc)  # refresh: saving retitles
 

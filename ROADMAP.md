@@ -47,7 +47,7 @@ declarative selectors resolved by a shared geometric model tracker (the
 of the mock so it validates every backend, including the real one, before
 any COM call.
 
-### v0.3 — Assemblies ◀ current phase
+### v0.3 — Assemblies ✅ (merged)
 
 Multi-part sessions in one flat command stream (named documents, active-
 document routing): insert components from same-run parts or external files
@@ -59,13 +59,20 @@ time, redundancy and under-constraint warn, and the bolt_circle macro
 builds fastener sets straight from hole features. Acceptance case: a
 manufacturable base + cover + M8 SHCS bolt circle saved as .SLDASM.
 
-### v0.4 — Engineering drawings
+### v0.4 — Engineering drawings ◀ current phase
 
-Drawing documents from parts/assemblies: sheet + template selection,
-standard and projected views, section and detail views, dimensions,
-annotations, title-block fields. Command families for view placement and
-dimensioning; mock validation checks view/reference existence and sheet
-bounds.
+Dimensioned 2D sheets (.SLDDRW) from parts and assemblies — the final
+pre-LLM milestone. `create_drawing` (A4/A3, standard scale series with
+auto-pick, third- or first-angle projection, title-block metadata via
+custom properties), `standard_views` (front anchor + projected top/right),
+`isometric_view`, `section_view` (center cutting lines, labeled A-A, B-B —
+the hollow-turned-part view), and `smart_dimensions`: not a dump, but the
+governing set — envelope (W/H/T or diameters + length), N×Ø hole callouts
+with datum position dims, pattern pitch, fillet/chamfer/slot note block.
+The drawing twin lays views out on a validated sheet grid and projects
+every dimension attachment into exact sheet coordinates for selection.
+Acceptance cases: the v0.2 bracket sheet and a hollow flange with a
+section view proving internal bore dimensioning.
 
 ### v1.0 — LLM natural-language layer
 

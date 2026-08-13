@@ -111,6 +111,67 @@ Run `examples/bolted_cover.json` and verify, in order:
    `OpenDoc6` (ByRef Errors/Warnings as VARIANTs) and re-activates the
    assembly before `AddComponent5`.
 
+## v0.4 smoke-test checklist (drawings)
+
+The drawing COM surface is the riskiest SW-Pilot uses. CI proves the twin
+math and that the mock/COM call plans are identical; the following can
+**only** be verified live. Run `examples/flange_drawing.json` first (it
+exercises everything), then `examples/bracket_drawing.json`.
+
+1. **Section view sequence** — the single riskiest sequence of the
+   project: `ActivateView("front")` → `SketchManager.CreateLine` with
+   the cutting line in PARENT-VIEW sketch coordinates (model scale,
+   origin = the projection of the model origin — matching the official
+   `CreateSectionViewAt5` example) → `CreateSectionViewAt5(x, y, 0,
+   "A", 0, Nothing, 0)` (placement in sheet meters) consuming the
+   still-selected line → `ActivateSheet(<live sheet name>)`. The live
+   check is the view-coordinate SCALE convention: if the flange's
+   cutting line lands on the part but at half/double length, adjust the
+   view-scale division in `DrawingTracker.section_view`. The sheet name
+   is read live from `GetCurrentSheet` and a failed `ActivateSheet`
+   aborts the run (a silent failure would leave later annotation picks
+   in view coordinates).
+2. **Section image orientation** — the twin assumes SolidWorks orients
+   the section arrows to the sheet's projection angle: a vertical section
+   placed right shows the right-view image (`u = -z` third-angle,
+   `u = +z` first-angle). If the bore/length dimensions in the flange's
+   section attach mirrored, flip the section case in
+   `DrawingTracker.project`.
+3. **Sheet-space dimension picks** — `SelectByID2("", "EDGE", x, y, 0)`
+   at computed sheet coordinates must snap to the intended view edge.
+   Verify the flange bore Ø30 (picks on the two internal profile lines)
+   and the bracket 120 envelope width (picks on the left/right outline).
+   The twin assumes a drawing view's position is its geometry center
+   (the projected AABB center); a constant offset on every pick means
+   that assumption is wrong for your SolidWorks version.
+4. **AddDimension2 inference** — one circle pick must yield a diameter
+   dimension; two parallel edges a linear dimension; an edge + a circle
+   a to-center linear dimension. Verify the counterbore callout renders
+   `4X Ø6.6` with the `⌴Ø11 ↧6` second line (the `<HOLE-SPOT>`/
+   `<HOLE-DEPTH>`/`<MOD-DIAM>` tokens must render as symbols, not
+   literal text) via `IDisplayDimension.SetText`.
+5. **Paper/template constants** — `NewDocument(template, 6|8, 0, 0)`
+   (A4/A3 landscape from `swDwgPaperSizes_e`) and
+   `Sheet.SetProperties(paper, template, num, den, firstAngle, w, h)`.
+   If the sheet comes up the wrong size or loses its format, the
+   `SW_PAPER_SIZES` / `SW_SHEET_TEMPLATES` values in
+   `swpilot/backends/calls.py` are the first suspects.
+6. **Projected view placement** — `CreateUnfoldedViewAt3` drops the top
+   view above and the right view to the right (third angle). Also run a
+   `"projection": "first"` variant: the placements flip (top below,
+   right to the left) while each view's IMAGE stays identical to the
+   third-angle one — first vs third angle never changes an individual
+   view's image, only the arrangement.
+7. **Title block** — the custom properties (Description, DrawnBy,
+   DrawnDate) set via `CustomPropertyManager("").Add3` (delete-and-add,
+   so re-drawing the same model updates them) on the *model* must appear
+   in the sheet format's `$PRPSHEET` fields; a customized template may
+   not map every field (the `DIMENSIONS IN MM` note is placed explicitly
+   and must always appear bottom-left).
+8. **View renaming via `SetName2`** — the views must be named `front`,
+   `top`, `right`, `iso`, `section_A` in the tree; projected-view
+   selection (`SelectByID2(..., "DRAWINGVIEW", ...)`) depends on it.
+
 ## What runs where
 
 | layer | cloud/CI | Windows |

@@ -21,6 +21,7 @@ from swpilot.commands.schema import (
     Chamfer,
     CircularPattern,
     CreateAxis,
+    CreateDrawing,
     CreatePlane,
     CreateSketch,
     CutExtrude,
@@ -30,12 +31,17 @@ from swpilot.commands.schema import (
     Extrude,
     Fillet,
     InsertComponent,
+    IsometricView,
     LinearPattern,
     Mate,
     NewAssembly,
     NewPart,
     SaveAssembly,
+    SaveDrawing,
     SavePart,
+    SectionView,
+    SmartDimensions,
+    StandardViews,
 )
 from swpilot.model.apply import ApplyResult, apply_to_session
 from swpilot.model.session import SessionTracker
@@ -122,6 +128,13 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
         backend.new_assembly(res.document)
         backend.mark_active(res.document)
         return
+    if isinstance(c, CreateDrawing):
+        assert res.document is not None and res.drawing is not None
+        # The backend activates the model doc for the title-block
+        # properties itself, then leaves the new drawing active.
+        backend.create_drawing(res.drawing)
+        backend.mark_active(res.document)
+        return
     # Everything else operates on the twin's active document — switch the
     # backend there first (no-op when already active).
     assert res.document is not None and res.doc_kind is not None
@@ -148,6 +161,19 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
         return
     if isinstance(c, SaveAssembly):
         backend.save_assembly(c.path)
+        return
+    if isinstance(c, StandardViews | IsometricView):
+        backend.add_views(res.views)
+        return
+    if isinstance(c, SectionView):
+        assert res.section is not None
+        backend.add_section_view(res.section)
+        return
+    if isinstance(c, SmartDimensions):
+        backend.add_annotations(res.dimensions, res.notes)
+        return
+    if isinstance(c, SaveDrawing):
+        backend.save_drawing(c.path)
         return
     if isinstance(c, CreatePlane):
         assert res.plane_display is not None
@@ -205,7 +231,7 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
 def execute(
     expanded: list[ExpandedCommand],
     backend: Backend,
-    schema_version: str = "0.3",
+    schema_version: str = "0.4",
 ) -> RunReport:
     session = SessionTracker()
     results: list[CommandResult] = []

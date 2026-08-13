@@ -117,6 +117,9 @@ class ModelTracker:
         self.features: list[FeatureRec] = []
         self.active_sketch: SketchRec | None = None
         self.saved_to: list[str] = []
+        # Feature count at the last save; drawings compare against it to
+        # warn when the saved file is stale.
+        self.saved_feature_marker: int | None = None
         self._warnings: list[str] = []
         self._sketch_n = 0
         self._counters: dict[str, int] = {}
@@ -843,6 +846,15 @@ class ModelTracker:
 
         feature = FeatureRec(name=self._next_name("linear_pattern"), kind="linear_pattern")
         feature.detail["seeds"] = list(feature_names)
+        feature.detail["direction"] = direction
+        feature.detail["spacing"] = spacing
+        feature.detail["count"] = count
+        if direction2 is not None:
+            feature.detail["direction2"] = {
+                "direction": direction2[0],
+                "spacing": direction2[1],
+                "count": direction2[2],
+            }
         boss_fp: list[tuple[PlaneFamily, g.Shape]] = []
         cut_fp: list[tuple[PlaneFamily, g.Shape]] = []
         for seed in seeds:
@@ -901,6 +913,9 @@ class ModelTracker:
             name=self._next_name("circular_pattern"), kind="circular_pattern"
         )
         feature.detail["seeds"] = list(feature_names)
+        feature.detail["axis"] = axis
+        feature.detail["count"] = count
+        feature.detail["total_angle"] = total_angle
         axis_vec = AXIS_VECTORS[axis]
         cut_fp: list[tuple[PlaneFamily, g.Shape]] = []
         boss_fp: list[tuple[PlaneFamily, g.Shape]] = []
@@ -973,6 +988,7 @@ class ModelTracker:
                 "so its call log will show the absolute path"
             )
         self.saved_to.append(path)
+        self.saved_feature_marker = len(self.features)
 
     def finalize(self) -> None:
         for sketch in self.sketches:

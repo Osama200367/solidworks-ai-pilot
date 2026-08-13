@@ -91,6 +91,17 @@ def _dist(a: Point, b: Point) -> float:
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
+def flank_pitch_half_angle(module: float, teeth: int, pressure_angle_deg: float) -> float:
+    """The tooth half-angle at the pitch circle: π/(2z) for a standard gear.
+
+    Exposed so tests can assert the involute is oriented to NARROW toward
+    the tip (half-angle decreasing with radius) rather than widen — the
+    property that makes a real involute tooth, and the one a sign error in
+    the flank rotation silently breaks at the pitch point.
+    """
+    return math.pi / (2.0 * teeth)
+
+
 def sample_segment(seg: ProfileSeg, n: int = 10) -> list[Point]:
     """Approximate a segment as points (for bbox / envelope math)."""
     if isinstance(seg, SplineSeg):
@@ -259,23 +270,26 @@ def spur_gear_tooth(
     t_tip = math.sqrt(max((ra / rb) ** 2 - 1.0, 0.0))
     r_form = max(rb, rf)
     t_form = math.sqrt(max((r_form / rb) ** 2 - 1.0, 0.0))
-    # Half tooth angle at the pitch circle is π/(2z); the involute rolls by
-    # inv(α) from the base circle to the pitch circle, so the flank is
-    # rotated by β to place the pitch point at π/(2z).
-    beta = math.pi / (2.0 * z) - involute_inv(alpha)
+    # Tooth half-angle at radius r (roll angle t): ψ(r) = π/(2z) + inv(α) −
+    # inv(α_r), where inv(α_r) = φ(t) = t − atan(t). ψ = π/(2z) at the pitch
+    # circle and DECREASES with radius, so the tooth narrows toward the tip
+    # (the defining property of an involute tooth). φ is SUBTRACTED — adding
+    # it inverts the tooth so the flanks widen and self-intersect.
+    inv_alpha = involute_inv(alpha)
+
+    def half_angle(t: float) -> float:
+        return math.pi / (2.0 * z) + inv_alpha - (t - math.atan(t))
 
     def flank_point(t: float, side: int) -> Point:
         r = rb * math.sqrt(1.0 + t * t)
-        phi = t - math.atan(t)
-        ang = side * (beta + phi)
-        return (r * math.cos(ang), r * math.sin(ang))
+        return (r * math.cos(side * half_angle(t)), r * math.sin(side * half_angle(t)))
 
     ts = [t_form + (t_tip - t_form) * i / (n_points - 1) for i in range(n_points)]
     left_flank = [flank_point(t, +1) for t in ts]  # base → tip
     right_flank = [flank_point(t, -1) for t in ts]
 
     # Pointed tooth: the flanks meet before the tip (no tip land).
-    tip_half_angle = beta + (t_tip - math.atan(t_tip))
+    tip_half_angle = half_angle(t_tip)
     pointed = tip_half_angle <= 1e-6
     if pointed:
         warnings.append(
@@ -290,45 +304,54 @@ def spur_gear_tooth(
     # the standard drawn-gear root. When rf ≥ rb the flank already reaches
     # the root, and a single small tangent arc blends F into the root floor.
     # The EXACT hob trochoid is a Windows-verified refinement either way.
+    # How far below the base circle the fillet can rise before its radial
+    # line would run past the flank start (rho ≤ rb). When this "fit room"
+    # is too small for a meaningful radial-line + fillet, a single tangent
+    # arc from F to the root circle is used instead — avoiding the near-cusp
+    # a vanishing fillet would leave.
+    # Room below the base circle for the fillet's radial line (rho ≤ rb).
+    r_fit = max((rb * rb - rf * rf) / (2.0 * rf), 0.0) if sub_base else 0.0
+    # A meaningful radial-line + tangent fillet needs both the sub-base room
+    # AND a flank that starts clear of the root; otherwise the tooth base is
+    # too shallow/narrow and the fillet arc would graze the root base arc
+    # (a near-cusp / self-intersection). There we drop straight to the root
+    # with a plain radial line (sharp-ish root) — always geometrically valid.
+    use_fillet = r_fit >= 0.15 * m and (rp - max(rb, rf)) >= 0.25 * m
+    fillet_reduced = not use_fillet and sub_base
+
     def root_region(
         flank: list[Point], side: int
     ) -> tuple[list[ArcSeg | LineSeg], Point, float]:
         f = flank[0]
         theta = math.atan2(f[1], f[0])
         ux, uy = math.cos(theta), math.sin(theta)  # radial unit at F's angle
-        if sub_base:
-            # fillet tangent to the radial line and the root circle
-            rho = math.sqrt(rf * rf + 2.0 * rf * r_fillet)
-            px, py = (-uy, ux)  # +angle perpendicular (tooth-space side)
-            perp = side  # left flank space is at larger angle
-            c = (rho * ux + r_fillet * perp * px, rho * uy + r_fillet * perp * py)
-            t_pt = (rho * ux, rho * uy)  # tangent on the radial line
-            cn = math.hypot(*c) or 1.0
-            b = (c[0] / cn * rf, c[1] / cn * rf)  # tangent on the root circle
-            line = LineSeg(start=f, end=t_pt)
-            arc = ArcSeg(center=c, start=t_pt, end=b,
-                         ccw=_cross((t_pt[0] - c[0], t_pt[1] - c[1]),
-                                    (b[0] - c[0], b[1] - c[1])) > 0)
-            return [line, arc], b, r_fillet
-        # rf ≥ rb: single tangent arc from F through its radial projection.
-        b = (rf * ux, rf * uy)
-        tx, ty = flank[1][0] - f[0], flank[1][1] - f[1]
-        tlen = math.hypot(tx, ty) or 1.0
-        nx, ny = -ty / tlen, tx / tlen
-        fbx, fby = f[0] - b[0], f[1] - b[1]
-        denom = 2.0 * (nx * fbx + ny * fby)
-        if abs(denom) < 1e-9:
+        if not use_fillet:
+            # plain radial line straight to the root circle at F's angle
+            b = (rf * ux, rf * uy)
             return [LineSeg(start=f, end=b)], b, 0.0
-        s = -(fbx * fbx + fby * fby) / denom
-        c = (f[0] + s * nx, f[1] + s * ny)
-        arc = ArcSeg(center=c, start=f, end=b,
-                     ccw=_cross((f[0] - c[0], f[1] - c[1]),
+        r_eff = min(r_fillet, r_fit) if sub_base else r_fillet
+        rho = math.sqrt(rf * rf + 2.0 * rf * r_eff)
+        px, py = (-uy, ux)  # +angle perpendicular (tooth-space side)
+        c = (rho * ux + r_eff * side * px, rho * uy + r_eff * side * py)
+        t_pt = (rho * ux, rho * uy)
+        cn = math.hypot(*c) or 1.0
+        b = (c[0] / cn * rf, c[1] / cn * rf)
+        line = LineSeg(start=f, end=t_pt)
+        arc = ArcSeg(center=c, start=t_pt, end=b,
+                     ccw=_cross((t_pt[0] - c[0], t_pt[1] - c[1]),
                                 (b[0] - c[0], b[1] - c[1])) > 0)
-        return [arc], b, abs(s)
+        return [line, arc], b, r_eff
 
     left_region, bl, rfil = root_region(left_flank, +1)
     right_region, br, _ = root_region(right_flank, -1)
-    actual_fillet = rfil if rfil > 0 else r_fillet
+    actual_fillet = rfil
+    if fillet_reduced:
+        warnings.append(
+            f"gear: the root is too shallow/narrow (z={z}, module={m}) for a "
+            f"{r_fillet:g} mm tangent fillet without self-intersection; the twin "
+            "uses a sharp radial root — add the fillet as a 3D edge fillet on "
+            "Windows if needed"
+        )
 
     # Closed loop, walked once: right root (BR→FR) → right flank (FR→tip)
     # → tip land (tip_R→tip_L) → left flank (tip→FL) → left root (FL→BL)
@@ -479,27 +502,52 @@ def ring_gear_tooth_space(
     r_lo = max(ra_i, rb)
     t_lo = math.sqrt(max((r_lo / rb) ** 2 - 1.0, 0.0))
     t_hi = math.sqrt(max((rf_i / rb) ** 2 - 1.0, 0.0))
-    # The tooth SPACE half-angle at the pitch circle equals the mating
-    # tooth half-thickness, π/(2z); flank rotated by β like the spur gear.
-    beta = math.pi / (2.0 * z) - involute_inv(alpha)
+    # The tooth-SPACE half-angle equals the mating tooth half-thickness:
+    # π/(2z) + inv(α) − inv(α_r), narrowing with radius (φ SUBTRACTED, as in
+    # the spur gear — adding it inverts the profile).
+    inv_alpha = involute_inv(alpha)
 
     def flank_point(t: float, side: int) -> Point:
         r = rb * math.sqrt(1.0 + t * t)
-        phi = t - math.atan(t)
-        ang = side * (beta + phi)
+        ang = side * (math.pi / (2.0 * z) + inv_alpha - (t - math.atan(t)))
         return (r * math.cos(ang), r * math.sin(ang))
 
     ts = [t_lo + (t_hi - t_lo) * i / (n_points - 1) for i in range(n_points)]
     left = [flank_point(t, +1) for t in ts]  # tip(inner) → root(outer)
     right = [flank_point(t, -1) for t in ts]
 
-    # loop: inner tip arc (right→left) → left flank (in→out) → outer root
-    # arc (left→right) → right flank (out→in).
+    # When the tip radius lies below the base circle the involute can't
+    # reach it (flank_point bottoms out at rb), so extend each flank inward
+    # with a short radial segment down to the true tip radius ra_i, then
+    # close with the tip-land arc there — like the spur gear's sub-base
+    # root. Exact shape is Windows-verified.
+    sub_base = ra_i < rb - 1e-9
+    inner_left, inner_right = left[0], right[0]
+    pre: list[ProfileSeg] = []
+    post: list[ProfileSeg] = []
+    if sub_base:
+        warnings.append(
+            "ring_gear: the tooth tip radius lies below the base circle, so the "
+            f"inner tip land is a radial transition to Ø{2 * ra_i:g} (not an "
+            "involute); exact shape is Windows-verified"
+        )
+        aL = math.atan2(left[0][1], left[0][0])
+        aR = math.atan2(right[0][1], right[0][0])
+        inner_left = (ra_i * math.cos(aL), ra_i * math.sin(aL))
+        inner_right = (ra_i * math.cos(aR), ra_i * math.sin(aR))
+        pre = [LineSeg(start=inner_left, end=left[0])]
+        post = [LineSeg(start=right[0], end=inner_right)]
+
+    # loop: inner tip arc (right→left) → [radial in→flank] → left flank
+    # (in→out) → outer root arc (left→right) → right flank (out→in) →
+    # [flank→radial out].
     segments: list[ProfileSeg] = [
-        _arc_through(right[0], left[0], (0.0, 0.0)),
+        _arc_through(inner_right, inner_left, (0.0, 0.0)),
+        *pre,
         SplineSeg(points=tuple(left)),
         _arc_through(left[-1], right[-1], (0.0, 0.0)),
         SplineSeg(points=tuple(reversed(right))),
+        *post,
     ]
     inv = RingGearInvariants(
         module=m,
@@ -611,28 +659,42 @@ def sprocket_tooth(chain: str, teeth: int, n_points: int = 12) -> SprocketTooth:
     flank_center = (tan_pt[0] + re * ux, tan_pt[1] + re * uy)
     # angle on the flank arc for the seat/flank tangent point:
     a0 = math.atan2(tan_pt[1] - flank_center[1], tan_pt[0] - flank_center[0])
-    # find where the flank arc crosses r_tip
+    # Where the flank arc crosses the tip circle. Pick the intersection
+    # NEAREST the tangent point (the first crossing as the flank rises from
+    # the seat), and sweep the SHORT way to it — picking by polar angle or
+    # taking the long arc balloons the flank far past the tip.
     hits = _line_circle_on_arc(flank_center, re, r_tip)
     if not hits:
         warnings.append(
             f"sprocket: flank arc (re={re:.2f}) does not reach the tip circle "
             f"(Da={da:.2f}); the tooth is truncated to the flank end"
         )
+        a1 = a0 + math.radians(20)
         tip_pt = (
-            flank_center[0] + re * math.cos(a0 + math.radians(20)),
-            flank_center[1] + re * math.sin(a0 + math.radians(20)),
+            flank_center[0] + re * math.cos(a1),
+            flank_center[1] + re * math.sin(a1),
         )
-        a1 = math.atan2(tip_pt[1] - flank_center[1], tip_pt[0] - flank_center[0])
     else:
-        tip_pt = max(hits, key=lambda q: math.atan2(q[1], q[0]))
+        tip_pt = min(hits, key=lambda q: math.hypot(q[0] - tan_pt[0], q[1] - tan_pt[1]))
         a1 = math.atan2(tip_pt[1] - flank_center[1], tip_pt[0] - flank_center[0])
+    delta = a1 - a0
+    while delta > math.pi:
+        delta -= 2 * math.pi
+    while delta < -math.pi:
+        delta += 2 * math.pi
     flank_pts = tuple(
         (
-            flank_center[0] + re * math.cos(a0 + (a1 - a0) * i / (n_points - 1)),
-            flank_center[1] + re * math.sin(a0 + (a1 - a0) * i / (n_points - 1)),
+            flank_center[0] + re * math.cos(a0 + delta * i / (n_points - 1)),
+            flank_center[1] + re * math.sin(a0 + delta * i / (n_points - 1)),
         )
         for i in range(n_points)
     )
+    max_flank_r = max(math.hypot(*q) for q in flank_pts)
+    if max_flank_r > r_tip + 0.5:
+        warnings.append(
+            f"sprocket: flank profile reaches Ø{2 * max_flank_r:.1f} beyond the tip "
+            f"Ø{da:.1f} for z={z} chain {chain}; verify the tooth on Windows"
+        )
 
     def mir(pt: Point) -> Point:
         return (pt[0], -pt[1])

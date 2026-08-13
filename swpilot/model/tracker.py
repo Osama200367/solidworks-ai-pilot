@@ -339,7 +339,10 @@ class ModelTracker:
             lo[ai], hi[ai] = f.curve_axial
             return (lo[0], lo[1], lo[2]), (hi[0], hi[1], hi[2])
         frame = f.curve_frame
-        assert frame is not None
+        if frame is None or (not f.curve_full_disk and f.curve_bbox is None):
+            raise ModelError(
+                f"feature {f.name!r}: curved feature has no boundable envelope"
+            )
         if f.curve_full_disk:  # a whole gear/sprocket: full disk of curve_radius
             r = f.curve_radius or 0.0
             us = vs = (-r, r)
@@ -567,17 +570,23 @@ class ModelTracker:
         else:
             sketch = self._consume_sketch("revolve")
             pts = _prismatic_profile_points(sketch.entities)
-        # radial coordinate = distance from the in-plane axis line; axial =
-        # projection onto the axis. The profile must stay on one side of the
-        # axis or the revolve self-intersects.
-        radials = [(-av) * u + au * v for (u, v) in pts]  # signed perp distance
+        # The revolve axis is a world axis through the ORIGIN, but the sketch
+        # plane may be offset along its normal. The signed in-plane distance
+        # from the axis line is (-av)u + au·v; the true distance from the
+        # world axis also folds in the plane offset (perpendicular to the
+        # in-plane axis): √(in_plane² + offset²). A profile only crosses the
+        # world axis when the axis actually lies IN the plane (offset ≈ 0).
+        off = frame.offset
+        radials = [(-av) * u + au * v for (u, v) in pts]  # signed, in-plane
         axials = [au * u + av * v for (u, v) in pts]
-        if min(radials) < -EPS and max(radials) > EPS:
+        if abs(off) <= EPS and min(radials) < -EPS and max(radials) > EPS:
             raise ModelError(
                 "revolve: the profile crosses the revolve axis; a solid of revolution "
                 "needs the whole profile on one side of the axis"
             )
-        rmax = max(abs(r) for r in radials)
+        import math as _math
+
+        rmax = max(_math.hypot(r, off) for r in radials)
         feature = FeatureRec(
             name=self._next_name("boss"),
             kind="boss",
@@ -1187,20 +1196,24 @@ class ModelTracker:
             frame = seed.sketch.frame
             if seed.curved:
                 # A curved seed (a gear/sprocket tooth) can't be footprint-
-                # rotated; the whole pattern is a disk of the tooth's tip
-                # radius. Record it as the gear envelope so assemblies bound
-                # the component by its tip cylinder, not one tooth.
+                # rotated. A BOSS seed's pattern is the whole gear — a disk
+                # of the tooth's tip radius — so record that envelope. A CUT
+                # seed (ring-gear space, sprocket gap) adds no material and
+                # bounds nothing, so leave the pattern un-curved: feature_aabb
+                # then reports "no boundable geometry" instead of asserting on
+                # an unset curve_bbox.
                 if abs(abs(dot(axis_vec, frame.normal)) - 1.0) > EPS:
                     self._warn(
                         f"circular_pattern: axis {axis!r} is not normal to the curved "
                         f"seed {seed.name}'s plane; the gear envelope may be wrong"
                     )
-                feature.curved = True
-                feature.curve_full_disk = seed.kind == "boss"
-                feature.curve_radius = seed.curve_radius
-                feature.curve_frame = seed.curve_frame
-                feature.curve_depth = seed.curve_depth
-                feature.curve_reverse = seed.curve_reverse
+                if seed.kind == "boss":
+                    feature.curved = True
+                    feature.curve_full_disk = True
+                    feature.curve_radius = seed.curve_radius
+                    feature.curve_frame = seed.curve_frame
+                    feature.curve_depth = seed.curve_depth
+                    feature.curve_reverse = seed.curve_reverse
                 continue
             if abs(abs(dot(axis_vec, frame.normal)) - 1.0) > EPS:
                 self._warn(
@@ -1247,12 +1260,24 @@ class ModelTracker:
         self.gear = invariants
 
     def helix_thread(
-        self, diameter: float, pitch: float, length: float, right_handed: bool
+        self,
+        diameter: float,
+        pitch: float,
+        length: float,
+        right_handed: bool,
+        on_feature: str | None = None,
     ) -> FeatureRec:
         self._require_part("helix_thread")
         if not self.has_solid:
             raise ModelError(
                 "helix_thread: there is no solid to thread; build a cylindrical boss first"
+            )
+        if on_feature is not None:
+            self.feature(on_feature)  # validate it exists (raises if not)
+            self._warn(
+                f"helix_thread: on_feature={on_feature!r} names the intended target, but "
+                "v0.5 places the cosmetic helix on the front plane at the origin; the "
+                "swept rib and its placement on that boss are Windows-verified"
             )
         cv.helix_spec(diameter, pitch, length, right_handed)  # validates pitch > 0
         self._warn(

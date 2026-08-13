@@ -330,7 +330,7 @@ def apply_to_session(session: SessionTracker, cmd: PrimitiveT) -> ApplyResult:
     elif isinstance(cmd, HelixThread):
         result.feature_name = (
             session.active_part("helix_thread")
-            .helix_thread(cmd.diameter, cmd.pitch, cmd.length, cmd.right_handed)
+            .helix_thread(cmd.diameter, cmd.pitch, cmd.length, cmd.right_handed, cmd.on_feature)
             .name
         )
     elif isinstance(cmd, GearMeta):

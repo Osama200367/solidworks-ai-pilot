@@ -216,10 +216,14 @@ class TestHelixThread:
         report = execute(expand_commands(list(cf.commands)), b)
         assert report.success
         helix = next(c for c in b.call_log if c.method == "InsertHelix")
-        # revolutions = length / pitch = 20; RH; pitch in meters
+        assert helix.target == "Model"  # IModelDoc2.InsertHelix, not FeatureManager
+        # revolutions = length / pitch = 20; pitch in meters
         assert helix.args[7] == pytest.approx(20.0)
-        assert helix.args[2] is True  # right-handed
+        assert helix.args[2] is False  # Clockwise = not right_handed (RH helix)
         assert helix.args[6] == pytest.approx(0.002)  # pitch 2 mm
+        # the base-circle sketch is opened and closed around the circle
+        methods = [c.method for c in b.call_log]
+        assert methods.count("InsertSketch") >= 2  # open + close the helix sketch
         assert any(
             "cosmetic" in w for r in report.results for w in r.warnings
         )

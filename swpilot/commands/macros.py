@@ -502,9 +502,12 @@ def _draw_loop(segments: object, kind: str) -> list[Emitted]:
 def _keyway_cut(keyway: Keyway, bore: float) -> list[Emitted]:
     """A rectangular keyway slot cut through, on top of the bore (front plane)."""
     # The keyway sits at the top of the bore: a rectangle spanning the key
-    # width, from just inside the bore wall out by `depth`.
+    # width, from the bore center out to r + depth (so the outer edge is
+    # exactly `depth` past the bore wall — the schema's "radial depth past
+    # the bore wall"). Height = depth + r with the center at (r+depth)/2
+    # puts the inner edge at the bore center and the outer at r + depth.
     r = bore / 2.0
-    cy = r + keyway.depth / 2.0
+    cy = (r + keyway.depth) / 2.0
     return [
         CreateSketch(plane="front"),
         DrawRectangle(center=(0.0, cy), width=keyway.width, height=keyway.depth + r),

@@ -143,6 +143,21 @@ class SolidWorksBackend(Backend):
                 result = None
             else:
                 live_args = spec.args
+                if spec.method == "CreateSpline":
+                    # ISketchManager.CreateSpline wants a SAFEARRAY of doubles
+                    # (VT_ARRAY|VT_R8). Under late binding a bare Python
+                    # tuple of floats marshals as VT_ARRAY|VT_VARIANT, which
+                    # SolidWorks rejects (returns Nothing) — so build a typed
+                    # double array VARIANT, like the Transform2 / ByRef cases.
+                    import pythoncom
+                    import win32com.client as w32
+
+                    assert isinstance(spec.args[0], tuple)
+                    live_args = (
+                        w32.VARIANT(
+                            pythoncom.VT_ARRAY | pythoncom.VT_R8, list(spec.args[0])
+                        ),
+                    )
                 byref_n = _BYREF_TRAILING.get(spec.method, 0)
                 byref_vars = []
                 if byref_n:

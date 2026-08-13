@@ -1442,8 +1442,11 @@ def revolve_calls(
 ) -> list[CallSpec]:
     """Select a reference axis, then FeatureRevolve2 the active sketch.
 
-    IFeatureManager.FeatureRevolve2 (18 params): a solid, non-thin,
-    non-cut revolve by a blind angle about the selected axis.
+    IFeatureManager.FeatureRevolve2 (20 params): a solid, non-thin,
+    non-cut revolve by a blind angle about the selected axis. The two
+    OffsetDistance doubles (positions 13-14, after OffsetReverse1/2) are
+    part of the documented signature — omitting them shifts every later
+    argument and the call fails.
     """
     return [
         *_end_sketch_edits(),
@@ -1469,6 +1472,7 @@ def revolve_calls(
                 math.radians(angle_deg),  # Dir1Angle
                 0.0,    # Dir2Angle
                 False, False,  # OffsetReverse1/2
+                0.0, 0.0,  # OffsetDistance1/2
                 0,      # ThinType
                 0.0, 0.0,  # ThinThickness1/2
                 True,   # Merge
@@ -1490,16 +1494,34 @@ def helix_thread_calls(
     right_handed: bool,
     revolutions: float,
     name: str,
+    plane_display: str = "Front Plane",
 ) -> list[CallSpec]:
-    """A cosmetic swept-helix thread rib (least-verified surface of v0.5).
+    """A cosmetic helix guide curve (least-verified surface of v0.5).
 
-    Sketches a base circle at the thread diameter, builds a helix
-    (FeatureManager.InsertHelix, by pitch & revolutions), then a small
-    triangular rib swept along it (SweepFeature). The exact InsertHelix /
-    SweepFeature argument forms and the swept-solid validity are wholly
-    Windows-verified — this is a visual thread, never load-bearing.
+    Opens a sketch on a plane, draws the base circle at the thread
+    diameter, CLOSES the sketch (leaving it selected), then builds the
+    helix with IModelDoc2.InsertHelix (by pitch & revolutions) consuming
+    that selected circle. This emits only the helix CURVE — the visible
+    triangular thread rib would be a separate profile + SweepFeature,
+    which is deferred: the whole helix/sweep surface is Windows-verified
+    and cosmetic, never load-bearing. The 3rd InsertHelix argument is
+    Clockwise (mapped from right_handed); confirm the handedness live.
     """
     return [
+        # open a sketch for the base circle
+        CallSpec(
+            target="Model.Extension",
+            method="SelectByID2",
+            args=(plane_display, "PLANE", 0.0, 0.0, 0.0, False, 0, None, 0),
+            check="truthy",
+            note=f"select plane '{plane_display}' for the helix base circle",
+        ),
+        CallSpec(
+            target="Model.SketchManager",
+            method="InsertSketch",
+            args=(True,),
+            note="open the helix base-circle sketch",
+        ),
         CallSpec(
             target="Model.SketchManager",
             method="CreateCircleByRadius",
@@ -1507,27 +1529,35 @@ def helix_thread_calls(
             check="non_null",
             note=f"helix base circle Ø{diameter_mm} mm",
         ),
-        # IFeatureManager.InsertHelix(ByPitchAndRevolutions, ReverseDir,
-        #   RightHanded, TaperHelix, TaperAngle, Height, Pitch, Revolutions,
-        #   StartAngle) — cosmetic; exact form is Windows-verified.
+        # close the sketch (toggle out of sketch mode) — it stays selected,
+        # and InsertHelix consumes the selected circle. Do NOT ClearSelection.
         CallSpec(
-            target="Model.FeatureManager",
+            target="Model.SketchManager",
+            method="InsertSketch",
+            args=(True,),
+            note="close the base-circle sketch (stays selected for InsertHelix)",
+        ),
+        # IModelDoc2.InsertHelix(ByPitchAndRevolution, ReverseDirection,
+        #   Clockwise, TaperHelix, TaperAngle, Height, Pitch, Revolution,
+        #   StartAngle) — cosmetic; exact form/handedness Windows-verified.
+        CallSpec(
+            target="Model",
             method="InsertHelix",
             args=(
-                True,   # by pitch & revolutions
-                False,  # reverse direction
-                right_handed,
-                False,  # taper
-                0.0,    # taper angle
+                True,            # by pitch & revolutions
+                False,           # reverse direction
+                not right_handed,  # Clockwise (RH helix is CCW)
+                False,           # taper
+                0.0,             # taper angle
                 length_mm * MM_TO_M,
                 pitch_mm * MM_TO_M,
                 revolutions,
-                0.0,    # start angle
+                0.0,             # start angle
             ),
             check="non_null",
             remember=True,
-            note=f"cosmetic helix: pitch {pitch_mm} mm × {revolutions:.2f} rev "
-            f"({'RH' if right_handed else 'LH'}) — Windows-verified sweep",
+            note=f"cosmetic helix curve: pitch {pitch_mm} mm × {revolutions:.2f} rev "
+            f"({'RH' if right_handed else 'LH'}) — Windows-verified; rib sweep deferred",
         ),
         rename_last_feature(name),
     ]

@@ -183,10 +183,14 @@ Run `examples/spur_gear_m2_z20.json`, then `gear_mesh_check.json`, then
 
 1. **Spline fit fidelity** — `SketchManager.CreateSpline` must interpolate
    the involute point set (18 points/flank, in meters) within tolerance so
-   the flank *is* a true involute, not a wandering B-spline. Measure the
-   built flank's pressure angle at the pitch circle against 20°; a visibly
-   wavy flank means the point count in `curves.spur_gear_tooth` needs
-   raising or `CreateSpline` needs the tangency variant.
+   the flank *is* a true involute, not a wandering B-spline. The point
+   array is passed as a `VT_ARRAY|VT_R8` VARIANT (the COM backend wraps it;
+   a bare tuple marshals as a variant array SolidWorks rejects) — if
+   CreateSpline still returns null, that wrapping is the first suspect.
+   Measure the built flank's pressure angle at the pitch circle against
+   20°; a visibly wavy flank means the point count in
+   `curves.spur_gear_tooth` needs raising or `CreateSpline` needs the
+   tangency variant.
 2. **Closed extrudable tooth profile** — the tooth loop is
    `arc → spline → arc(tip) → spline → arc → arc(root)`; SolidWorks must
    see it as ONE closed contour and boss-extrude it. A "self-intersecting"
@@ -209,11 +213,15 @@ Run `examples/spur_gear_m2_z20.json`, then `gear_mesh_check.json`, then
 6. **Internal ring-gear cut** — the involute tooth-space cut must remove
    material inward from the rim without over/under-cutting; the twin can
    only envelope-check a curved cut (it warns so).
-7. **Cosmetic helix (`InsertHelix` + sweep)** — the LEAST-verified surface
-   of the phase. The `InsertHelix` argument form (by-pitch-and-revolutions)
-   and the swept-rib `SweepFeature` are documented but untested here; treat
-   a helix failure as expected-to-iterate, not a regression. It is
-   cosmetic — never rely on it for a real thread.
+7. **Cosmetic helix (`InsertHelix`)** — the LEAST-verified surface of the
+   phase. The call opens a base-circle sketch, closes it (leaving it
+   selected), and calls `IModelDoc2.InsertHelix` (by pitch & revolutions)
+   on that circle — v0.5 emits only the helix CURVE; the visible triangular
+   rib (a profile + `SweepFeature`) is deferred. Confirm the `InsertHelix`
+   argument order and that the 3rd argument (`Clockwise`, mapped from
+   `right_handed`) gives the intended handedness. Treat a helix failure as
+   expected-to-iterate, not a regression. It is cosmetic — never rely on it
+   for a real thread.
 8. **Reference-axis revolve selection** — `SelectByID2(..., "AXIS", ...)`
    must resolve the `SWPilot_Axis_X` reference axis created by
    `create_axis`; if it fails, the axis feature name or the selection type

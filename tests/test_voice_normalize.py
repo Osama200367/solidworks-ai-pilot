@@ -43,7 +43,7 @@ class TestArabicNumbers:
             ("خمسة و عشرين", "25"),  # conjunction as a separate token
             ("واحد وعشرين", "21"),
             ("اثنين عشرة", "12"),  # ones + ten = teen
-            ("مية وعشرين", "120"),
+            ("مئة وعشرين", "120"),  # MSA hundred (colloquial مية omitted: "water")
             ("ثلاثين", "30"),
             ("تلاتين", "30"),  # dialect thirty
         ],

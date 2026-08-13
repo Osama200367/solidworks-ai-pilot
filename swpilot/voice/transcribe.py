@@ -77,6 +77,11 @@ def _encode_multipart(model: str, filename: str, audio: bytes) -> tuple[bytes, s
     boundary = "----swpilot" + uuid.uuid4().hex
     crlf = b"\r\n"
     dash = b"--" + boundary.encode("ascii")
+    # Escape quotes/backslashes and strip CR/LF so an odd filename can't break
+    # the header framing or inject extra parts (RFC 7578 §5.1).
+    safe_name = (
+        filename.replace("\\", "\\\\").replace('"', '\\"').replace("\r", " ").replace("\n", " ")
+    )
     lines: list[bytes] = [
         dash,
         b'Content-Disposition: form-data; name="model"',
@@ -85,7 +90,7 @@ def _encode_multipart(model: str, filename: str, audio: bytes) -> tuple[bytes, s
         dash,
         (
             b'Content-Disposition: form-data; name="file"; filename="'
-            + filename.encode("utf-8")
+            + safe_name.encode("utf-8")
             + b'"'
         ),
         b"Content-Type: application/octet-stream",
@@ -172,9 +177,20 @@ def record_to_file(
         raise VoiceCaptureError(f"microphone capture failed: {exc}") from exc
 
     out = Path(path)
-    with wave.open(str(out), "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)  # int16
-        wav.setframerate(samplerate)
-        wav.writeframes(frames.tobytes())
+    # Open the file ourselves so a bad path/permission fails here cleanly,
+    # rather than half-constructing a wave.Wave_write inside wave.open().
+    try:
+        handle = out.open("wb")
+    except OSError as exc:  # missing dir, permission, etc.
+        raise VoiceCaptureError(f"could not save recording to {out}: {exc}") from exc
+    try:
+        with wave.open(handle, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)  # int16
+            wav.setframerate(samplerate)
+            wav.writeframes(frames.tobytes())
+    except OSError as exc:  # disk full mid-write, etc.
+        raise VoiceCaptureError(f"could not save recording to {out}: {exc}") from exc
+    finally:
+        handle.close()
     return out

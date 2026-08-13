@@ -75,9 +75,11 @@ _NUMBERS: dict[str, int] = {
     "ثلاثين": 30, "تلاتين": 30,
     "اربعين": 40, "خمسين": 50, "ستين": 60, "سبعين": 70,
     "ثمانين": 80, "تمانين": 80, "تسعين": 90,
-    # Arabic hundreds / thousand
-    "مئة": 100, "مائة": 100, "مية": 100, "ميه": 100,
-    "مئتين": 200, "ميتين": 200,
+    # Arabic hundreds / thousand. NB: the colloquial spellings مية/ميه are
+    # deliberately omitted — they collide with the everyday word for "water";
+    # leaving them unconverted is the safe conservative choice.
+    "مئة": 100, "مائة": 100,
+    "مئتين": 200,
     "الف": 1000, "الاف": 1000,
 }
 
@@ -96,10 +98,11 @@ _UNITS: dict[str, str] = {
 # --- dimension/connector dialect terms → canonical Arabic -------------------
 # Deliberately tiny and high-confidence; the LLM already understands standard
 # Arabic, so this only fixes clearly colloquial forms.
+# Kept intentionally tiny and unambiguous. Excluded on purpose: سنة/سنون (mean
+# "year"/"years", not "tooth"), قطره (also "his drop"), and تخن (a verb) — the
+# LLM handles standard Arabic, so a wrong rewrite is worse than none.
 _TERMS: dict[str, str] = {
-    "تخانة": "سماكة", "تخانه": "سماكة", "تخينة": "سماكة", "تخن": "سماكة",
-    "قطره": "قطر",
-    "سنون": "اسنان", "سنة": "سن",
+    "تخانة": "سماكة", "تخانه": "سماكة", "تخينة": "سماكة",
 }
 
 _CONJUNCTIONS = {"و", "and"}
@@ -143,23 +146,31 @@ def _glued_waw_number(token: str) -> int | None:
     return None
 
 
-def _combines(last: int, nxt: int, *, conj: bool) -> bool:
+def _combines(last: int, nxt: int, *, conj: bool, english_last: bool) -> bool:
     """Whether ``nxt`` joins the running number after ``last``.
 
-    With an explicit conjunction (Arabic ``خمسة وعشرين`` → 25) always combine.
-    Without one, combine only in unambiguous positional patterns; crucially,
-    two bare adjacent numbers with no conjunction (Arabic ``اثنين عشرين`` =
-    "two, twenty" = a module and a tooth count) stay SEPARATE.
+    Combining only happens for *genuine* composite forms — never for two
+    distinct numbers a speaker meant separately. A conjunction (و/"and") does
+    NOT license an arbitrary sum: ``عشرين وثلاثين`` (twenty and thirty) is two
+    dimensions, not 50. The valid patterns:
+
+    - a count then a multiplier: "three hundred", ``خمس مئة`` (but not
+      multiplier×multiplier like ``مية ومية``);
+    - a multiplier then a smaller remainder: "hundred twenty", ``مئة وعشرين``;
+    - ones + ten = a teen: ``اثنين عشرة`` = 12;
+    - English tens-then-ones: "twenty five" = 25 (English only — Arabic
+      ``عشرين خمسة`` is two separate numbers);
+    - Arabic ones-then-tens under a conjunction: ``خمسة وعشرين`` = 25.
     """
-    if conj:
+    if nxt in _MULTIPLIERS and last not in _MULTIPLIERS:  # "three hundred"
         return True
-    if nxt in _MULTIPLIERS:  # "three hundred", "خمس مئة"
-        return True
-    if last in _TENS and nxt in _ONES:  # English "twenty five" = 25
+    if last >= 100 and last % 100 == 0 and nxt < 100:  # "hundred twenty", "مئتين وخمسين"
         return True
     if last in _ONES and nxt == 10:  # ones + ten = teens ("اثنين عشرة" = 12)
         return True
-    return last in _MULTIPLIERS and nxt < last  # "hundred twenty"
+    if english_last and last in _TENS and nxt in _ONES:  # English "twenty five"
+        return True
+    return conj and last in _ONES and nxt in _TENS  # Arabic "خمسة وعشرين" = 25
 
 
 def _scan_number_run(folded: list[str], i: int) -> tuple[list[int], int]:
@@ -175,32 +186,32 @@ def _scan_number_run(folded: list[str], i: int) -> tuple[list[int], int]:
     if v0 is None:
         return [], i
     values = [v0]
+    last_tok = folded[i]  # token backing values[-1], for script-aware combining
     k = i + 1
-    pending_conj = False
     while k < len(folded):
         tok = folded[k]
-        # standalone conjunction: consume only if a number follows
+        # An optional standalone conjunction may precede the next number. It is
+        # only *consumed* if the number actually combines — otherwise it is left
+        # in place so the caller emits it as ordinary prose (not swallowed).
+        conj = False
+        j = k
         if tok in _CONJUNCTIONS:
-            if k + 1 < len(folded) and (
-                _number_value(folded[k + 1]) is not None
-                or _glued_waw_number(folded[k + 1]) is not None
-            ):
-                pending_conj = True
-                k += 1
-                continue
+            conj = True
+            j = k + 1
+            if j >= len(folded):
+                break  # trailing conjunction — leave it
+            tok = folded[j]
+
+        glued = _glued_waw_number(tok)  # e.g. وعشرين (an implicit conjunction)
+        val = glued if glued is not None else _number_value(tok)
+        combine_conj = conj or glued is not None
+        if val is None:
             break
-        glued = _glued_waw_number(tok)
-        if glued is not None:  # وعشرين — conjunction is implicit
-            values.append(glued)
-            k += 1
-            pending_conj = False
-            continue
-        nxt = _number_value(tok)
-        if nxt is None or not _combines(values[-1], nxt, conj=pending_conj):
+        if not _combines(values[-1], val, conj=combine_conj, english_last=last_tok.isascii()):
             break
-        values.append(nxt)
-        k += 1
-        pending_conj = False
+        values.append(val)
+        last_tok = tok
+        k = j + 1
     return values, k
 
 

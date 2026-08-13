@@ -60,7 +60,7 @@ def test_plate_with_holes_call_sequence() -> None:
 
 def test_plate_with_holes_final_state() -> None:
     report, _ = run_example("plate_with_holes.json")
-    state = report.final_state
+    state = report.final_state["documents"][0]
     assert [f["name"] for f in state["features"]] == ["Boss-Extrude1", "Cut-Extrude1"]
     holes = state["sketches"][1]["entities"]
     assert len(holes) == 4
@@ -98,7 +98,8 @@ class TestBracket:
 
     def test_succeeds_with_expected_features(self) -> None:
         report, _ = run_example("bracket.json")
-        assert [f["name"] for f in report.final_state["features"]] == [
+        doc = report.final_state["documents"][0]
+        assert [f["name"] for f in doc["features"]] == [
             "Boss-Extrude1",
             "Fillet1",
             "Chamfer1",
@@ -109,8 +110,8 @@ class TestBracket:
             "Cut-Extrude4",
             "CirPattern1",
         ]
-        assert report.final_state["axes"] == ["SWPilot_Axis_Y", "SWPilot_Axis_Z"]
-        assert "SWPilot_Plane1" in report.final_state["planes"]
+        assert doc["axes"] == ["SWPilot_Axis_Y", "SWPilot_Axis_Z"]
+        assert "SWPilot_Plane1" in doc["planes"]
 
     def test_fillet_selects_corner_edges_in_meters(self) -> None:
         _, backend = run_example("bracket.json")

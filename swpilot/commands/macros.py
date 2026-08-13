@@ -14,6 +14,7 @@ import math
 
 from swpilot.commands.schema import (
     AddCornerHoles,
+    BoltCircle,
     CircularPattern,
     CreateAxis,
     CreatePlane,
@@ -24,12 +25,19 @@ from swpilot.commands.schema import (
     DrawRectangle,
     Extrude,
     FaceRef,
+    FacingName,
     Hole,
+    InsertComponent,
     LinearPattern,
+    Mate,
+    MateCylinder,
+    MateFace,
     NewPart,
+    RotationStepSpec,
 )
 from swpilot.model import geometry as g
-from swpilot.model.planes import FAMILY_FOR_AXIS, PlaneFamily
+from swpilot.model.planes import AXIS_VECTORS, FAMILY_FOR_AXIS, PlaneFamily, Vec3
+from swpilot.model.session import SessionTracker
 from swpilot.model.tracker import FeatureRec, ModelTracker
 from swpilot.tolerances import EPS
 
@@ -92,7 +100,7 @@ def _plane_for(
 # --------------------------------------------------------------------------
 
 
-def expand_create_plate(cmd: CreatePlate, tracker: ModelTracker) -> list[Emitted]:
+def expand_create_plate(cmd: CreatePlate) -> list[Emitted]:
     return [
         NewPart(),
         CreateSketch(plane=cmd.plane),
@@ -274,6 +282,164 @@ def expand_sketch_on_face(cmd: CreateSketch, tracker: ModelTracker) -> list[Emit
     family, position, _outward = _resolve_face(tracker, cmd.on, "create_sketch")
     plane_name, out = _plane_for(tracker, family, position)
     out.append(CreateSketch(plane=plane_name))
+    return out
+
+
+# --------------------------------------------------------------------------
+# bolt_circle
+# --------------------------------------------------------------------------
+
+
+def _flip_facing(facing: FacingName) -> FacingName:
+    return ("-" if facing[0] == "+" else "+") + facing[1]  # type: ignore[return-value]
+
+
+def _facing_vec(facing: FacingName) -> Vec3:
+    sign = 1.0 if facing[0] == "+" else -1.0
+    base = AXIS_VECTORS[facing[1]]  # type: ignore[index]
+    return (base[0] * sign, base[1] * sign, base[2] * sign)
+
+
+def _cross(a: Vec3, b: Vec3) -> Vec3:
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _rotation_steps_between(a: Vec3, b: Vec3) -> list[RotationStepSpec]:
+    """90-degree steps rotating axis-aligned unit vector ``a`` onto ``b``."""
+    if a == b:
+        return []
+    dot_ab = a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    if dot_ab < -0.5:  # antiparallel: 180 about any perpendicular world axis
+        for i, axis in enumerate("xyz"):
+            if abs(a[i]) < 0.5:
+                return [RotationStepSpec(axis=axis, degrees=180)]  # type: ignore[arg-type]
+    # perpendicular: +90 about k where k x a = b (i.e. k = a x b)
+    k = _cross(a, b)
+    for i, axis in enumerate("xyz"):
+        if abs(k[i]) > 0.5:
+            return [RotationStepSpec(axis=axis, degrees=90 if k[i] > 0 else -90)]  # type: ignore[arg-type]
+    raise MacroExpansionError("bolt_circle: cannot orient the bolt (internal)")
+
+
+def expand_bolt_circle(cmd: BoltCircle, session: SessionTracker) -> list[Emitted]:
+    asm = session.active_assembly("bolt_circle")
+    holes_comp = asm.component(cmd.holes.component)
+    if holes_comp.part is None:
+        raise MacroExpansionError(
+            "bolt_circle: the holes component must be a same-run part; external "
+            "components carry no hole geometry"
+        )
+    feature = holes_comp.part.feature(cmd.holes.of_feature)
+    if feature.sketch is None or feature.kind != "cut":
+        raise MacroExpansionError(
+            f"bolt_circle: {cmd.holes.of_feature!r} is not a hole (cut) feature"
+        )
+    assert feature.sketch is not None  # guarded by the kind check above
+    circles = [e for e in feature.sketch.entities if isinstance(e, g.Circle)]
+    if not circles:
+        raise MacroExpansionError(
+            f"bolt_circle: {cmd.holes.of_feature!r} contains no circular holes"
+        )
+    if len({round(c.diameter, 6) for c in circles}) > 1:
+        raise MacroExpansionError(
+            "bolt_circle: the hole feature mixes diameters; one bolt size cannot "
+            "fit all of them"
+        )
+
+    bolt_part = session.part(cmd.bolt.part, "bolt_circle")
+    if not bolt_part.saved_to:
+        raise MacroExpansionError(
+            f"bolt_circle: bolt part {cmd.bolt.part!r} has not been saved; add "
+            "save_part before the assembly section"
+        )
+    shank = bolt_part.feature(cmd.bolt.shank_feature)
+    head = bolt_part.feature(cmd.bolt.head_feature)
+    for f, label in ((shank, "shank"), (head, "head")):
+        if f.kind != "boss" or f.sketch is None:
+            raise MacroExpansionError(f"bolt_circle: {label} feature {f.name!r} is not a boss")
+    assert shank.sketch is not None and head.sketch is not None
+    shank_circles = [e for e in shank.sketch.entities if isinstance(e, g.Circle)]
+    if len(shank_circles) != 1:
+        raise MacroExpansionError(
+            f"bolt_circle: shank feature {shank.name!r} must be a single circle boss"
+        )
+    shank_r = shank_circles[0].r
+    hole_r = circles[0].r
+    if shank_r >= hole_r - EPS:
+        raise MacroExpansionError(
+            f"bolt_circle: shank diameter {2 * shank_r} mm does not clear the "
+            f"{2 * hole_r} mm holes; a fastener needs clearance (e.g. Ø9 holes "
+            "for M8 bolts)"
+        )
+    head_circles = [e for e in head.sketch.entities if isinstance(e, g.Circle)]
+    head_r = max((c.r for c in head_circles), default=0.0)
+    if head_r <= hole_r + EPS:
+        raise MacroExpansionError(
+            f"bolt_circle: head diameter {2 * head_r} mm does not bear on the "
+            f"{2 * hole_r} mm holes — the bolt would fall through; use a larger "
+            "head or smaller holes"
+        )
+
+    # Which way does the bolt point? Local "down" = head -> shank.
+    n = shank.sketch.frame.normal
+    shank_lo, shank_hi = bolt_part.feature_aabb(shank.name)
+    head_lo, head_hi = bolt_part.feature_aabb(head.name)
+    axis_i = max(range(3), key=lambda i: abs(n[i]))
+    shank_mid = (shank_lo[axis_i] + shank_hi[axis_i]) / 2.0
+    head_mid = (head_lo[axis_i] + head_hi[axis_i]) / 2.0
+    sign = 1.0 if shank_mid > head_mid else -1.0
+    down_local: Vec3 = tuple(sign if i == axis_i else 0.0 for i in range(3))  # type: ignore[assignment]
+
+    seat_face = asm.resolve_face(cmd.seat.component, cmd.seat.facing, cmd.seat.of_feature)
+    target_down = _facing_vec(_flip_facing(cmd.seat.facing))
+    steps = _rotation_steps_between(down_local, target_down)
+    head_facing = _flip_facing(cmd.seat.facing)
+
+    # Insert with a small standoff along the seat normal: the seat mate then
+    # performs a real closing move, and the pre-solve pick points are never
+    # ambiguously coplanar.
+    standoff = 2.0  # mm
+    seat_sign = 1.0 if cmd.seat.facing[0] == "+" else -1.0
+    out: list[Emitted] = []
+    for i, c in enumerate(circles):
+        world_center = holes_comp.transform.apply(
+            feature.sketch.frame.to_world(c.cx, c.cy, 0.0)
+        )
+        at = list(world_center)
+        at[seat_face.axis] = seat_face.position + seat_sign * standoff
+        name = f"{cmd.prefix}_{i + 1}"
+        out.append(
+            InsertComponent(
+                part=cmd.bolt.part,
+                name=name,
+                at=(at[0], at[1], at[2]),
+                rotate=steps,
+            )
+        )
+        # Static side first ('a'), bolt second ('b'): the solver moves the
+        # freer component and documents "b moves to a".
+        out.append(
+            Mate(
+                type="concentric",
+                a=MateCylinder(
+                    component=cmd.holes.component,
+                    of_feature=cmd.holes.of_feature,
+                    at=(c.cx, c.cy),
+                ),
+                b=MateCylinder(component=name, of_feature=shank.name),
+            )
+        )
+        out.append(
+            Mate(
+                type="coincident",
+                a=cmd.seat,
+                b=MateFace(component=name, facing=head_facing, of_feature=head.name),
+            )
+        )
     return out
 
 

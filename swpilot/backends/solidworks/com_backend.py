@@ -28,6 +28,15 @@ except ImportError as _exc:  # pragma: no cover - exercised only off-Windows
     ) from _exc
 
 
+# Methods whose trailing parameters are ByRef long out-params: the logged
+# CallSpec carries plain 0 placeholders; _execute swaps in VT_BYREF VARIANTs.
+_BYREF_TRAILING: dict[str, int] = {
+    "AddMate5": 1,  # ErrorStatus
+    "ActivateDoc2": 1,  # Errors
+    "OpenDoc6": 2,  # Errors, Warnings
+}
+
+
 class SolidWorksBackend(Backend):
     name = "solidworks"
 
@@ -47,6 +56,11 @@ class SolidWorksBackend(Backend):
         self._model: Any = None
         self._last_feature: Any = None
         self._part_template = part_template or os.environ.get("SWPILOT_PART_TEMPLATE")
+        self._assembly_template = os.environ.get("SWPILOT_ASSEMBLY_TEMPLATE")
+        self._documents: dict[str, Any] = {}  # logical name -> model handle
+        self._titles: dict[str, str] = {}  # logical name -> window title
+        self._components: dict[str, Any] = {}  # instance name -> IComponent2
+        self._saved_paths: set[str] = set()  # normcase abs paths saved this run
 
     # -- CallSpec execution --------------------------------------------
 
@@ -68,6 +82,16 @@ class SolidWorksBackend(Backend):
                 raise BackendError(
                     "internal error: no feature available to rename (LastFeature)"
                 )
+        elif root_name.startswith("Component:") or (
+            root_name == "Component" and rest
+        ):
+            comp_name = target.partition(":")[2]
+            obj = self._components.get(comp_name)
+            if obj is None:
+                raise BackendError(
+                    f"internal error: unknown component handle {comp_name!r}"
+                )
+            return obj
         else:
             raise BackendError(f"internal error: unknown call target root {root_name!r}")
         if rest:
@@ -81,10 +105,37 @@ class SolidWorksBackend(Backend):
             # can fail on attribute access, not just on the final call.
             obj = self._resolve_target(spec.target)
             if spec.kind == "set":
-                setattr(obj, spec.method, spec.value)
+                value = spec.value
+                if spec.method == "Transform2" and spec.target.startswith("Component:"):
+                    # The logged value is 16 floats; the live property needs
+                    # an IMathTransform built from them.
+                    mu = self._app.GetMathUtility()
+                    assert isinstance(spec.value, tuple)
+                    value = mu.CreateTransform(list(spec.value))
+                setattr(obj, spec.method, value)
                 result = None
             else:
-                result = getattr(obj, spec.method)(*spec.args)
+                live_args = spec.args
+                byref_n = _BYREF_TRAILING.get(spec.method, 0)
+                byref_vars = []
+                if byref_n:
+                    # ByRef long out-params must be passed as VT_BYREF
+                    # VARIANTs under late binding; the logged spec keeps the
+                    # plain 0 placeholders (documented divergence, like
+                    # template paths).
+                    import pythoncom
+                    import win32com.client as w32
+
+                    byref_vars = [
+                        w32.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+                        for _ in range(byref_n)
+                    ]
+                    live_args = spec.args[:-byref_n] + tuple(byref_vars)
+                result = getattr(obj, spec.method)(*live_args)
+                if isinstance(result, tuple):
+                    # Early-bound dispatch returns out-params alongside the
+                    # result; the primary result is always first.
+                    result = result[0] if result else None
         except BackendError:
             raise
         except Exception as exc:
@@ -97,10 +148,14 @@ class SolidWorksBackend(Backend):
                 f"(returned {result!r}): {spec.note}"
             )
         if spec.check == "non_null" and result is None:
+            detail = ""
+            if spec.kind == "call" and _BYREF_TRAILING.get(spec.method):
+                values = [getattr(v, "value", None) for v in byref_vars]
+                detail = f" (out-param status: {values})"
             raise BackendError(
-                f"COM call {spec.target}.{spec.method} returned nothing: {spec.note}. "
-                "SolidWorks likely rejected the operation; check the part for "
-                "error markers."
+                f"COM call {spec.target}.{spec.method} returned nothing: {spec.note}."
+                f"{detail} SolidWorks likely rejected the operation; check the "
+                "part for error markers."
             )
         if spec.check == "status_zero" and result not in (0, None):
             raise BackendError(
@@ -118,11 +173,18 @@ class SolidWorksBackend(Backend):
         for spec in specs:
             self._execute(spec)
 
-    # -- primitive operations ------------------------------------------
+    # -- document lifecycle --------------------------------------------
 
-    def new_part(self) -> None:
-        if self._model is not None:
-            raise BackendError("new_part: a part is already open; one part per run")
+    def _register_document(self, name: str, model: Any) -> None:
+        self._documents[name] = model
+        try:
+            self._titles[name] = str(model.GetTitle())
+        except Exception:
+            self._titles[name] = name
+        self._model = model
+        self._active_doc = name
+
+    def new_part(self, name: str) -> None:
         template = self._part_template
         if template is None:
             template = self._execute(calls.get_default_part_template())
@@ -132,7 +194,99 @@ class SolidWorksBackend(Backend):
                     "Tools > Options > Default Templates, or pass --template / set "
                     "SWPILOT_PART_TEMPLATE"
                 )
-        self._model = self._execute(calls.new_document(str(template)))
+        model = self._execute(calls.new_document(str(template)))
+        self._register_document(name, model)
+
+    def new_assembly(self, name: str) -> None:
+        template = self._assembly_template
+        specs = calls.new_assembly_calls()
+        if template is None:
+            template = self._execute(specs[0])
+            if not template:
+                raise BackendError(
+                    "new_assembly: SolidWorks returned no default assembly template; "
+                    "set one in Tools > Options > Default Templates, or set "
+                    "SWPILOT_ASSEMBLY_TEMPLATE"
+                )
+        model = self._execute(calls.new_document(str(template)))
+        self._register_document(name, model)
+
+    def _current_title(self, name: str) -> str:
+        """The document's live window title (SaveAs3 changes titles)."""
+        handle = self._documents.get(name)
+        if handle is None:
+            raise BackendError(f"activate_document: unknown document {name!r}")
+        try:
+            title = str(handle.GetTitle())
+            self._titles[name] = title
+            return title
+        except Exception:
+            return self._titles.get(name, name)
+
+    def activate_document(self, name: str, kind: str) -> None:
+        title = self._current_title(name)
+        (spec,) = calls.activate_document_calls(title)
+        model = self._execute(spec)
+        self._documents[name] = model
+        self._model = model
+        self._active_doc = name
+
+    # -- assembly operations -------------------------------------------
+
+    def insert_component(
+        self,
+        path: str,
+        name: str,
+        translation: tuple[float, float, float],
+        rotation_row_major: list[float] | None,
+        fixed: bool,
+        external: bool,
+    ) -> None:
+        self._require_model("insert_component")
+        abs_path = os.path.abspath(path)
+        if os.path.normcase(abs_path) not in self._saved_paths:
+            # External file: AddComponent5 needs the document open in the
+            # session. Load it, then re-activate the assembly (OpenDoc6
+            # makes the opened part active).
+            self._execute_all(calls.open_external_part_calls(abs_path))
+            assert self._active_doc is not None
+            (reactivate,) = calls.activate_document_calls(
+                self._current_title(self._active_doc)
+            )
+            self._model = self._execute(reactivate)
+            self._documents[self._active_doc] = self._model
+        insert_spec, rename_spec = calls.insert_component_calls(abs_path, name, translation)
+        component = self._execute(insert_spec)
+        self._components[name] = component
+        self._execute(rename_spec)
+        if rotation_row_major is not None:
+            self._execute_all(
+                calls.component_transform_calls(name, rotation_row_major, translation)
+            )
+        if fixed:
+            asm_title = self._titles.get(self._active_doc or "", "<asm>")
+            self._execute_all(calls.fix_component_calls(name, asm_title))
+
+    def add_mate(
+        self,
+        mate_type: str,
+        pick_a: Vec3,
+        pick_b: Vec3,
+        value: float | None,
+        name: str,
+    ) -> None:
+        self._require_model("add_mate")
+        self._execute_all(calls.add_mate_calls(mate_type, pick_a, pick_b, value, name))
+
+    def save_assembly(self, path: str) -> None:
+        self._require_model("save_assembly")
+        abs_path = os.path.abspath(path)
+        self._execute_all(calls.save_assembly_calls(abs_path))
+        self._saved_paths.add(os.path.normcase(abs_path))
+        if self._active_doc is not None:
+            self._current_title(self._active_doc)  # refresh: saving retitles
+
+    # -- primitive operations ------------------------------------------
 
     def create_plane(self, name: str, base_display: str, distance: float) -> None:
         self._require_model("create_plane")
@@ -224,6 +378,9 @@ class SolidWorksBackend(Backend):
         self._require_model("save_part")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_part_calls(abs_path))
+        self._saved_paths.add(os.path.normcase(abs_path))
+        if self._active_doc is not None:
+            self._current_title(self._active_doc)  # refresh: saving retitles
 
     # -- lifecycle / reporting -----------------------------------------
 
@@ -236,6 +393,9 @@ class SolidWorksBackend(Backend):
         # killing an app the user may have had open would be hostile.
         self._model = None
         self._last_feature = None
+        self._documents.clear()
+        self._titles.clear()
+        self._components.clear()
         self._app = None
 
     def state_summary(self) -> dict[str, object]:

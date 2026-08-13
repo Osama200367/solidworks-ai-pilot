@@ -1,0 +1,45 @@
+{
+  "schema_version": "0.3",
+  "commands": [
+    { "op": "new_part", "name": "base" },
+    { "op": "create_sketch" },
+    { "op": "draw_rectangle", "width": 120, "height": 80 },
+    { "op": "extrude", "depth": 12 },
+    { "op": "hole", "at": [[-45, -25], [45, -25], [-45, 25], [45, 25]], "diameter": 9 },
+    { "op": "save_part", "path": "base.SLDPRT" },
+
+    { "op": "new_part", "name": "cover" },
+    { "op": "create_sketch" },
+    { "op": "draw_rectangle", "width": 120, "height": 80 },
+    { "op": "extrude", "depth": 8 },
+    { "op": "hole", "at": [[-45, -25], [45, -25], [-45, 25], [45, 25]], "diameter": 9 },
+    { "op": "save_part", "path": "cover.SLDPRT" },
+
+    { "op": "new_part", "name": "m8_bolt" },
+    { "op": "create_sketch" },
+    { "op": "draw_circle", "diameter": 13 },
+    { "op": "extrude", "depth": 8 },
+    { "op": "create_sketch" },
+    { "op": "draw_circle", "diameter": 8 },
+    { "op": "extrude", "depth": 20, "reverse": true },
+    { "op": "save_part", "path": "m8_bolt.SLDPRT" },
+
+    { "op": "new_assembly", "name": "bolted_cover" },
+    { "op": "insert_component", "part": "base", "name": "base_1" },
+    { "op": "insert_component", "part": "cover", "name": "cover_1", "at": [0, 0, 20] },
+    { "op": "mate", "type": "coincident",
+      "a": { "component": "cover_1", "facing": "-z" },
+      "b": { "component": "base_1", "facing": "+z" } },
+    { "op": "mate", "type": "concentric",
+      "a": { "component": "cover_1", "of_feature": "Cut-Extrude1", "at": [-45, -25] },
+      "b": { "component": "base_1", "of_feature": "Cut-Extrude1", "at": [-45, -25] } },
+    { "op": "mate", "type": "concentric",
+      "a": { "component": "cover_1", "of_feature": "Cut-Extrude1", "at": [45, 25] },
+      "b": { "component": "base_1", "of_feature": "Cut-Extrude1", "at": [45, 25] } },
+    { "op": "bolt_circle",
+      "bolt": { "part": "m8_bolt", "shank_feature": "Boss-Extrude2", "head_feature": "Boss-Extrude1" },
+      "holes": { "component": "cover_1", "of_feature": "Cut-Extrude1" },
+      "seat": { "component": "cover_1", "facing": "+z" } },
+    { "op": "save_assembly", "path": "bolted_cover.SLDASM" }
+  ]
+}

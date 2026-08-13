@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from swpilot.commands import macros
 from swpilot.commands.schema import (
     AddCornerHoles,
+    BoltCircle,
     CircularPattern,
     Command,
     CommandFile,
@@ -26,8 +27,9 @@ from swpilot.commands.schema import (
     LinearPattern,
     PrimitiveCommand,
 )
-from swpilot.model.apply import apply_to_tracker
-from swpilot.model.tracker import ModelError, ModelTracker
+from swpilot.model.apply import apply_to_session
+from swpilot.model.session import SessionTracker
+from swpilot.model.tracker import ModelError
 
 
 class CommandFileError(ValueError):
@@ -86,40 +88,42 @@ def load_command_file(path: str | Path) -> CommandFile:
     return parse_command_data(data)
 
 
-def _expand_one(cmd: Command, tracker: ModelTracker) -> list[object] | None:
+def _expand_one(cmd: Command, session: SessionTracker) -> list[object] | None:
     """Expansion for one source command; None means pass through as-is."""
     if isinstance(cmd, CreatePlate):
-        return macros.expand_create_plate(cmd, tracker)
+        return macros.expand_create_plate(cmd)
     if isinstance(cmd, AddCornerHoles):
-        return macros.expand_add_corner_holes(cmd, tracker)
+        return macros.expand_add_corner_holes(cmd, session.active_part("add_corner_holes"))
     if isinstance(cmd, Hole):
-        return macros.expand_hole(cmd, tracker)
+        return macros.expand_hole(cmd, session.active_part("hole"))
     if isinstance(cmd, CreateSketch) and cmd.on is not None:
-        return macros.expand_sketch_on_face(cmd, tracker)
+        return macros.expand_sketch_on_face(cmd, session.active_part("create_sketch"))
     if isinstance(cmd, LinearPattern | CircularPattern):
-        return macros.expand_pattern_axes(cmd, tracker)
+        return macros.expand_pattern_axes(cmd, session.active_part(cmd.op))
+    if isinstance(cmd, BoltCircle):
+        return macros.expand_bolt_circle(cmd, session)
     return None
 
 
 def expand_commands(commands: list[Command]) -> list[ExpandedCommand]:
     """Expand macros into primitives, preserving provenance.
 
-    Every emitted primitive is validated against a tracker as expansion
-    proceeds, so macro errors and geometric errors alike raise
+    Every emitted primitive is validated against a session twin as
+    expansion proceeds, so macro errors and geometric errors alike raise
     :class:`CommandFileError` naming the offending source command.
     """
-    tracker = ModelTracker()
+    session = SessionTracker()
     out: list[ExpandedCommand] = []
     for i, cmd in enumerate(commands):
         try:
-            expansion = _expand_one(cmd, tracker)
-        except macros.MacroExpansionError as exc:
+            expansion = _expand_one(cmd, session)
+        except (macros.MacroExpansionError, ModelError) as exc:
             raise CommandFileError(f"commands[{i}] ({cmd.op}): {exc}") from exc
         primitives: list[object] = [cmd] if expansion is None else expansion
         was_macro = expansion is not None
         for step, prim in enumerate(primitives):
             try:
-                apply_to_tracker(tracker, prim)  # type: ignore[arg-type]
+                apply_to_session(session, prim)  # type: ignore[arg-type]
             except ModelError as exc:
                 raise CommandFileError(f"commands[{i}] ({cmd.op}): {exc}") from exc
             out.append(

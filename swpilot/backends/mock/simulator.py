@@ -16,8 +16,49 @@ from swpilot.backends.base import Backend, Vec3
 class MockBackend(Backend):
     name = "mock"
 
-    def new_part(self) -> None:
+    def new_part(self, name: str) -> None:
         self.call_log.extend(calls.new_part_calls())
+
+    def new_assembly(self, name: str) -> None:
+        self.call_log.extend(calls.new_assembly_calls())
+
+    def activate_document(self, name: str, kind: str) -> None:
+        self.call_log.extend(calls.activate_document_calls(name))
+
+    def insert_component(
+        self,
+        path: str,
+        name: str,
+        translation: tuple[float, float, float],
+        rotation_row_major: list[float] | None,
+        fixed: bool,
+        external: bool,
+    ) -> None:
+        if external:
+            self.call_log.extend(calls.open_external_part_calls(path))
+            self.call_log.extend(
+                calls.activate_document_calls(self._active_doc or "<asm>")
+            )
+        self.call_log.extend(calls.insert_component_calls(path, name, translation))
+        if rotation_row_major is not None:
+            self.call_log.extend(
+                calls.component_transform_calls(name, rotation_row_major, translation)
+            )
+        if fixed:
+            self.call_log.extend(calls.fix_component_calls(name))
+
+    def add_mate(
+        self,
+        mate_type: str,
+        pick_a: Vec3,
+        pick_b: Vec3,
+        value: float | None,
+        name: str,
+    ) -> None:
+        self.call_log.extend(calls.add_mate_calls(mate_type, pick_a, pick_b, value, name))
+
+    def save_assembly(self, path: str) -> None:
+        self.call_log.extend(calls.save_assembly_calls(path))
 
     def create_plane(self, name: str, base_display: str, distance: float) -> None:
         self.call_log.extend(calls.create_plane_calls(name, base_display, distance))

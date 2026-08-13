@@ -32,7 +32,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_STT_BASE_URL = "https://api.openai.com/v1"
@@ -55,7 +55,8 @@ class VoiceCaptureError(RuntimeError):
 class STTConfig:
     base_url: str
     model: str
-    api_key: str
+    # repr=False: the key must never leak into logs/tracebacks via repr().
+    api_key: str = field(repr=False)
     timeout: float = 120.0
 
     @classmethod

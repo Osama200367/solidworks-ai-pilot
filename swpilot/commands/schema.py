@@ -43,6 +43,36 @@ PositiveMm = Annotated[float, BeforeValidator(_reject_bool), Field(gt=0, allow_i
 Point2D = tuple[Finite, Finite]
 Point3D = tuple[Finite, Finite, Finite]
 
+# Pattern/tooth counts expand to per-instance work in the digital twin (and to
+# real feature instances in SolidWorks), so an unbounded count is a
+# denial-of-service vector for a hostile command file. 1000 is far beyond any
+# real design while keeping validation fast.
+InstanceCount = Annotated[int, BeforeValidator(_reject_bool), Field(ge=2, le=1000)]
+MAX_SAVE_PATH = 240  # below the Windows MAX_PATH limit
+
+
+def _validate_safe_path(path: str, op: str) -> None:
+    """Reject save paths that escape the working directory.
+
+    Command files may come from an LLM (untrusted); a save path is an
+    arbitrary-file-write primitive on the COM backend, so traversal
+    (``..``), absolute paths (POSIX, drive-letter, or UNC), and control
+    characters are refused at the schema gate — before anything is shown,
+    confirmed, or executed. Relative sub-directory paths remain allowed.
+    """
+    if len(path) > MAX_SAVE_PATH:
+        raise ValueError(f"{op}: path is longer than {MAX_SAVE_PATH} characters")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in path):
+        raise ValueError(f"{op}: path contains control characters")
+    if path.startswith(("/", "\\")) or (len(path) >= 2 and path[1] == ":"):
+        raise ValueError(
+            f"{op}: absolute paths are not allowed; use a path relative "
+            "to the working directory"
+        )
+    segments = path.replace("\\", "/").split("/")
+    if ".." in segments:
+        raise ValueError(f"{op}: path traversal ('..') is not allowed")
+
 StandardPlane = Literal["front", "top", "right"]
 AxisName = Literal["x", "y", "z"]
 DirectionName = Literal["x", "y", "z", "-x", "-y", "-z"]
@@ -234,6 +264,7 @@ class SaveAssembly(_Cmd):
 
     @model_validator(mode="after")
     def _check_extension(self) -> SaveAssembly:
+        _validate_safe_path(self.path, "save_assembly")
         if not self.path.lower().endswith(".sldasm"):
             raise ValueError("save_assembly: path must end with .SLDASM")
         return self
@@ -378,7 +409,7 @@ class Chamfer(_Cmd):
 class Direction2(_Sub):
     direction: DirectionName
     spacing: PositiveMm
-    count: Annotated[int, Field(ge=2)]
+    count: InstanceCount
 
 
 class LinearPattern(_Cmd):
@@ -388,7 +419,7 @@ class LinearPattern(_Cmd):
     features: list[str] = Field(min_length=1)
     direction: DirectionName
     spacing: PositiveMm
-    count: Annotated[int, Field(ge=2)]
+    count: InstanceCount
     direction2: Direction2 | None = None
 
 
@@ -398,7 +429,7 @@ class CircularPattern(_Cmd):
     op: Literal["circular_pattern"] = "circular_pattern"
     features: list[str] = Field(min_length=1)
     axis: AxisName
-    count: Annotated[int, Field(ge=2)]
+    count: InstanceCount
     total_angle: Annotated[float, Field(gt=0, le=360, allow_inf_nan=False)] = 360.0
     equal_spacing: bool = True
 
@@ -411,6 +442,7 @@ class SavePart(_Cmd):
 
     @model_validator(mode="after")
     def _check_extension(self) -> SavePart:
+        _validate_safe_path(self.path, "save_part")
         if not self.path.lower().endswith(".sldprt"):
             raise ValueError("save_part: path must end with .SLDPRT")
         return self
@@ -482,7 +514,7 @@ class GearMeta(_Cmd):
 
     op: Literal["gear_meta"] = "gear_meta"
     module: PositiveMm
-    teeth: Annotated[int, Field(ge=4)]
+    teeth: Annotated[int, Field(ge=4, le=1000)]
     pressure_angle: Annotated[float, Field(gt=0, lt=45, allow_inf_nan=False)] = 20.0
 
 
@@ -585,6 +617,7 @@ class SaveDrawing(_Cmd):
 
     @model_validator(mode="after")
     def _check_extension(self) -> SaveDrawing:
+        _validate_safe_path(self.path, "save_drawing")
         if not self.path.lower().endswith(".slddrw"):
             raise ValueError("save_drawing: path must end with .SLDDRW")
         return self
@@ -658,7 +691,7 @@ class InvoluteSpurGear(_Cmd):
 
     op: Literal["involute_spur_gear"] = "involute_spur_gear"
     module: PositiveMm
-    teeth: Annotated[int, Field(ge=4)]
+    teeth: Annotated[int, Field(ge=4, le=1000)]
     face_width: PositiveMm
     bore: PositiveMm  # bore diameter
     pressure_angle: Annotated[float, Field(gt=0, lt=45, allow_inf_nan=False)] = 20.0
@@ -685,7 +718,7 @@ class InternalRingGear(_Cmd):
 
     op: Literal["internal_ring_gear"] = "internal_ring_gear"
     module: PositiveMm
-    teeth: Annotated[int, Field(ge=8)]
+    teeth: Annotated[int, Field(ge=8, le=1000)]
     face_width: PositiveMm
     rim_outer_diameter: PositiveMm
     pressure_angle: Annotated[float, Field(gt=0, lt=45, allow_inf_nan=False)] = 20.0
@@ -697,7 +730,7 @@ class SprocketIso(_Cmd):
 
     op: Literal["sprocket_iso"] = "sprocket_iso"
     chain: str  # e.g. "08B", "10B", "12B", "16B"
-    teeth: Annotated[int, Field(ge=6)]
+    teeth: Annotated[int, Field(ge=6, le=1000)]
     face_width: PositiveMm
     bore: PositiveMm
     keyway: Keyway | None = None
@@ -974,4 +1007,4 @@ class CommandFile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["0.1", "0.2", "0.3", "0.4", "0.5"]
-    commands: list[Command] = Field(min_length=1)
+    commands: list[Command] = Field(min_length=1, max_length=10_000)

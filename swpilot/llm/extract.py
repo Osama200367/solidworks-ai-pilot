@@ -19,7 +19,13 @@ class ExtractionError(ValueError):
 
 
 def _balanced_objects(text: str) -> list[str]:
-    """Every top-level balanced {...} span, respecting strings/escapes."""
+    """Every top-level balanced {...} span, respecting strings/escapes.
+
+    String tracking is scoped to *inside* an object (depth > 0). Prose at
+    depth 0 is ignored entirely — including stray double quotes such as
+    inch marks (``3" flange``), which would otherwise desync the scanner
+    and swallow the real JSON object that follows.
+    """
     spans: list[str] = []
     depth = 0
     start = -1
@@ -34,15 +40,20 @@ def _balanced_objects(text: str) -> list[str]:
             elif ch == '"':
                 in_str = False
             continue
+        if depth == 0:
+            # Outside any object: only an opening brace matters; a quote
+            # here is prose (e.g. an inch mark), not a JSON string start.
+            if ch == "{":
+                start = i
+                depth = 1
+            continue
+        # Inside an object: strings and nested braces both count.
         if ch == '"':
             in_str = True
         elif ch == "{":
-            if depth == 0:
-                start = i
             depth += 1
         elif ch == "}":
-            if depth > 0:
-                depth -= 1
+            depth -= 1
             if depth == 0 and start >= 0:
                 spans.append(text[start : i + 1])
                 start = -1
@@ -72,8 +83,11 @@ def extract_json(response: str) -> dict[str, object]:
     # fenced blocks first (reversed: a model's final restatement wins)
     for block in reversed(_FENCE_RE.findall(response)):
         candidates.append(block.strip())
-    # then balanced brace spans, largest first (the whole object over a nested one)
-    candidates.extend(sorted(_balanced_objects(response), key=len, reverse=True))
+    # then balanced brace spans in reverse document order. _balanced_objects
+    # returns only non-overlapping top-level siblings, so "last object wins"
+    # mirrors the fenced logic — a corrected restatement beats an earlier
+    # draft or an echoed example, regardless of which is longer.
+    candidates.extend(reversed(_balanced_objects(response)))
 
     parsed = [obj for c in candidates if (obj := _try_load(c)) is not None]
     if not parsed:
@@ -81,8 +95,10 @@ def extract_json(response: str) -> dict[str, object]:
             "no JSON object found in the response; the model may have replied "
             "with prose only — try again or use a different model"
         )
-    # prefer an object that looks like a CommandFile
+    # prefer an object that actually looks like a CommandFile: "commands"
+    # must be a list, so a decoy like {"commands": "..."} can't shadow the
+    # real object.
     for obj in parsed:
-        if "commands" in obj:
+        if isinstance(obj.get("commands"), list):
             return obj
     return parsed[0]

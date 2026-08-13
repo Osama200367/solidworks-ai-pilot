@@ -60,9 +60,12 @@ def _render_type(ann: Any) -> str:
         return f"[{_render_type(get_args(ann)[0])}, ...]"
     if origin in (tuple,):
         args = get_args(ann)
-        if len(args) == 2 and all(_is_number(a) for a in args):
+        # Only float tuples are coordinate points ("[x, y]" = a mm point per
+        # the legend). Integer tuples like ScaleRatio (tuple[PositiveInt, ...])
+        # must render distinctly so a 1:2 scale isn't labelled a mm point.
+        if len(args) == 2 and all(_is_float(a) for a in args):
             return "[x, y]"
-        if len(args) == 3 and all(_is_number(a) for a in args):
+        if len(args) == 3 and all(_is_float(a) for a in args):
             return "[x, y, z]"
         return "[" + ", ".join(_render_type(a) for a in args) + "]"
     if isinstance(ann, type) and issubclass(ann, BaseModel):
@@ -70,10 +73,11 @@ def _render_type(ann: Any) -> str:
     return getattr(ann, "__name__", str(ann))
 
 
-def _is_number(ann: Any) -> bool:
+def _is_float(ann: Any) -> bool:
+    """True for a float (possibly Annotated) — i.e. a coordinate component."""
     if get_origin(ann) is Annotated:
-        return _is_number(get_args(ann)[0])
-    return ann is float or ann is int
+        return _is_float(get_args(ann)[0])
+    return ann is float
 
 
 def _render_subobject(model: type[BaseModel]) -> str:
@@ -88,7 +92,9 @@ def _field_line(name: str, f: FieldInfo) -> str:
     t = _render_type(f.annotation)
     if f.is_required():
         return f"    {name}: {t}"
-    default = f.default
+    # Resolve the real default, running any default_factory (otherwise a
+    # factory field surfaces the PydanticUndefined sentinel into the prompt).
+    default = f.get_default(call_default_factory=True)
     if default is None:
         return f"    {name}?: {t}"
     if isinstance(default, str):

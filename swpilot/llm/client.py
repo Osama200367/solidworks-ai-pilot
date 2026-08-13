@@ -91,8 +91,16 @@ class OpenAICompatibleClient:
         except (json.JSONDecodeError, ValueError) as exc:
             raise LLMRequestError(f"unreadable response from the LLM endpoint: {exc}") from exc
         try:
-            return str(payload["choices"][0]["message"]["content"])
+            content = payload["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMRequestError(
                 f"unexpected response shape from the LLM endpoint: {repr(payload)[:300]}"
             ) from exc
+        if content is None:
+            # A null content (e.g. finish_reason=length or content_filter)
+            # would str() into the literal "None" and be fed to the parser.
+            raise LLMRequestError(
+                "the LLM endpoint returned empty content (null); the completion "
+                "was likely truncated or filtered — check finish_reason"
+            )
+        return str(content)

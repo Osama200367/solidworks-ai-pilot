@@ -153,6 +153,39 @@ class Backend(ABC):
     @abstractmethod
     def save_part(self, path: str) -> None: ...
 
+    # -- curve operations (v0.5) ---------------------------------------
+
+    @abstractmethod
+    def draw_spline(self, points: list[tuple[float, float]]) -> None: ...
+
+    @abstractmethod
+    def draw_arc(
+        self,
+        center: tuple[float, float],
+        start: tuple[float, float],
+        end: tuple[float, float],
+        ccw: bool,
+    ) -> None: ...
+
+    @abstractmethod
+    def draw_line(
+        self, start: tuple[float, float], end: tuple[float, float]
+    ) -> None: ...
+
+    @abstractmethod
+    def revolve(self, axis_feature: str, angle: float, reverse: bool, name: str) -> None: ...
+
+    @abstractmethod
+    def helix_thread(
+        self,
+        diameter: float,
+        pitch: float,
+        length: float,
+        right_handed: bool,
+        revolutions: float,
+        name: str,
+    ) -> None: ...
+
     # -- drawing operations (v0.4) -------------------------------------
 
     @abstractmethod

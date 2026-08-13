@@ -166,10 +166,11 @@ def _model_aabb(model: ModelTracker | AssemblyTracker, op: str) -> tuple[Vec3, V
     mins = [float("inf")] * 3
     maxs = [float("-inf")] * 3
     if isinstance(model, ModelTracker):
-        for f in model.features:
-            if f.kind != "boss":
-                continue
-            lo, hi = model.feature_aabb(f.name)
+        # solid_features() covers prismatic bosses, curved bosses, AND
+        # curved circular patterns (a whole gear's tip-diameter disk) — a
+        # boss-only loop would miss the patterned teeth and draw one tooth.
+        for name in model.solid_features():
+            lo, hi = model.feature_aabb(name)
             for i in range(3):
                 mins[i] = min(mins[i], lo[i])
                 maxs[i] = max(maxs[i], hi[i])

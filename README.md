@@ -4,15 +4,17 @@ AI-powered automation layer for SolidWorks. A user describes a part in plain
 language, an LLM translates that into structured JSON commands, and SW-Pilot
 executes them in SolidWorks through its COM API.
 
-**Current scope (v0.4)**: the JSON-command half of that pipeline, through
-**engineering drawings** — one command file builds parts and assemblies,
-then produces dimensioned 2D sheets (`.SLDDRW`): standard/projected views,
-isometric and section views, and *smart dimensioning* (the governing
-features a machinist needs, never an auto-dimension dump), with the title
-block filled from metadata. Everything except the final COM hop runs and
-is tested without SolidWorks — in CI, in the cloud, anywhere. See
-[ROADMAP.md](ROADMAP.md) for the phase plan; the LLM translation layer
-comes later and will simply emit the same JSON.
+**Current scope (v0.5)**: the JSON-command half of that pipeline, through
+a **curves engine** for true swept/curved geometry — real involute spur
+and internal ring gears, ISO-606 sprockets, a generic revolve (solids of
+revolution), and cosmetic helical threads — on top of parts, assemblies,
+and dimensioned 2D drawings. A pure-math curve layer generates the exact
+gear/sprocket invariants the digital twin verifies *and* the spline
+profile the COM backend draws; curved features that can't be reduced to a
+box degrade gracefully to a bounding envelope. Everything except the final
+COM hop runs and is tested without SolidWorks — in CI, in the cloud,
+anywhere. See [ROADMAP.md](ROADMAP.md) for the phase plan; the LLM
+translation layer comes last and will simply emit the same JSON.
 
 ```
 natural language ──▶ [LLM layer, v0.2] ──▶ commands.json ──▶ swpilot run
@@ -74,6 +76,7 @@ swpilot/
 │   ├── assembly.py          #   AssemblyTracker: components, mates, snap-solver
 │   ├── drawing.py           #   DrawingTracker: sheet layout, views, sheet-space picks
 │   ├── dimensioning.py      #   smart-dimension analyzer (governing features only)
+│   ├── curves.py            #   parametric curve generators (involute, ISO-606, revolve, helix)
 │   ├── session.py           #   named documents + active-document routing
 │   ├── apply.py             #   command → tracker dispatch (used twice, see below)
 │   └── presets.py           #   metric fastener hole presets (M3–M12)
@@ -221,6 +224,44 @@ touch anything tangentially (SolidWorks refuses zero-thickness geometry) —
 and because expansion runs the twin, *every* geometric rule fails at
 `swpilot validate` time, before any backend runs.
 
+### Curves engine (v0.5)
+
+True swept/curved geometry the prismatic engine can't make. New curve
+primitives — `draw_spline`, `draw_arc`, `draw_line`, `revolve`,
+`helix_thread` — plus four macros:
+
+| op | key fields | notes |
+|---|---|---|
+| `involute_spur_gear` | `module`, `teeth`, `pressure_angle` (20), `face_width`, `bore`, `hub_*?`, `keyway?` | real involute flank + tangent root fillet + tip land, patterned z times on a root cylinder |
+| `internal_ring_gear` | `module`, `teeth`, `face_width`, `rim_outer_diameter` | involute teeth cut inward into a rim |
+| `sprocket_iso` | `chain` (`08B`…`16B`), `teeth`, `face_width`, `bore`, `keyway?` | ISO-606 roller-seating + flank profile |
+| `revolve` (primitive) | `axis`, `angle` (360), `reverse` | solid of revolution of the active sketch; upgrades catalog approximations (v-pulley, belleville) to true geometry |
+| `helix_thread` (primitive) | `diameter`, `pitch`, `length`, `right_handed` | **cosmetic** swept thread rib, never load-bearing |
+| `gear_mesh_check` | `a`, `b`, `expected_center_distance?` | pure validation: two gears mesh iff equal module + pressure angle; center distance a = m·(z₁+z₂)/2 |
+
+The enabling design is a **pure-math curve layer** (`swpilot/model/curves.py`)
+that emits both the exact invariants and the profile the backend draws.
+Standard metric gear math (pitch Ø = m·z, base = pitch·cos α, addendum m,
+dedendum 1.25 m). The involute unwinds by roll angle t:
+`x = rb(cos t + t·sin t)`, `y = rb(sin t − t·cos t)`.
+
+**The twin degrades gracefully.** It can't reduce a spline-flanked tooth to
+a box, so a curved feature carries a bounding annulus/cylinder (so a gear
+stays a valid assembly component with a resolvable envelope for mates) plus
+the computed invariants. It **verifies exactly in CI**: pitch/base/tip/root
+diameters, tooth count, tooth thickness (πm/2), the undercut flag
+(z < 2/sin²α), bore-fits-under-root, and the mesh check. It **delegates to
+Windows** (numbered in the WINDOWS_SETUP v0.5 checklist): spline fit
+fidelity, that mirror+pattern yields a closed extrudable profile, the exact
+root trochoid, and revolve/helix solid validity. Nothing is a silent pass —
+anything the twin can't verify is a warning that names what Windows must
+confirm.
+
+Acceptance: `examples/spur_gear_m2_z20.json` (module-2, 20-tooth, 20° gear,
+Ø16 bore + keyway), `examples/gear_mesh_check.json` (that gear meshing-
+checked against a 40-tooth mate at 60 mm center distance), and
+`examples/v_pulley_revolved.json` (the v-pulley rebuilt with `revolve`).
+
 ## Run reports
 
 Every `swpilot run` writes `<file>.report.json`: per-command status
@@ -229,17 +270,17 @@ log with arguments (in meters, as SolidWorks receives them), and a final model
 state snapshot. On the mock backend that snapshot is the simulated feature
 tree; on the real backend it is read back from SolidWorks.
 
-## What v0.4 deliberately does not do
+## What v0.5 deliberately does not do
 
 Native Hole Wizard features (holes are composed cuts by design), sketch
 constraints/dimensions as commands, width mates, non-English SolidWorks
 installs (planes are selected by their English names), cross-family cut
 containment validation (warning only), footprint-union computation
 (warning only), rotated-rectangle pattern instances in twin validation
-(warning only); on drawings: sections of views other than the front view,
-offset/stepped section lines, detail views, GD&T, per-slot dimensions
-(slots travel in the note block), dimension-text collision avoidance
-beyond band reservation, and assembly sheets beyond views + envelope
-dims (component features belong on their own part sheets). The LLM layer
-comes last; its integration point is frozen: it produces a `CommandFile`
-JSON document, and everything downstream already exists.
+(warning only); on drawings: non-front sections, offset/stepped section
+lines, detail views, GD&T; on curves: profile-shifted (corrected) gears,
+helical/bevel/worm gears, the exact hob-generated root trochoid (a tangent
+arc stands in), load-bearing thread forms (the helix is cosmetic), and
+twin-side containment of spline cuts (envelope + Windows-verified). The
+LLM layer comes last; its integration point is frozen: it produces a
+`CommandFile` JSON document, and everything downstream already exists.

@@ -1,0 +1,20 @@
+{
+  "schema_version": "0.5",
+  "commands": [
+    { "op": "new_part", "name": "v_pulley" },
+    { "op": "create_axis", "axis": "x" },
+    { "op": "create_sketch", "plane": "front" },
+    { "op": "draw_line", "start": [-10, 12], "end": [10, 12] },
+    { "op": "draw_line", "start": [10, 12], "end": [10, 45] },
+    { "op": "draw_line", "start": [10, 45], "end": [4, 45] },
+    { "op": "draw_line", "start": [4, 45], "end": [0, 33] },
+    { "op": "draw_line", "start": [0, 33], "end": [-4, 45] },
+    { "op": "draw_line", "start": [-4, 45], "end": [-10, 45] },
+    { "op": "draw_line", "start": [-10, 45], "end": [-10, 12] },
+    { "op": "revolve", "axis": "x", "angle": 360 },
+    { "op": "create_sketch", "plane": "right" },
+    { "op": "draw_circle", "diameter": 16 },
+    { "op": "cut_extrude", "through_all": true },
+    { "op": "save_part", "path": "v_pulley.SLDPRT" }
+  ]
+}

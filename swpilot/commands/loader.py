@@ -23,9 +23,13 @@ from swpilot.commands.schema import (
     CommandFile,
     CreatePlate,
     CreateSketch,
+    GearMeshCheck,
     Hole,
+    InternalRingGear,
+    InvoluteSpurGear,
     LinearPattern,
     PrimitiveCommand,
+    SprocketIso,
 )
 from swpilot.model.apply import apply_to_session
 from swpilot.model.session import SessionTracker
@@ -102,6 +106,14 @@ def _expand_one(cmd: Command, session: SessionTracker) -> list[object] | None:
         return macros.expand_pattern_axes(cmd, session.active_part(cmd.op))
     if isinstance(cmd, BoltCircle):
         return macros.expand_bolt_circle(cmd, session)
+    if isinstance(cmd, InvoluteSpurGear):
+        return macros.expand_involute_spur_gear(cmd)
+    if isinstance(cmd, InternalRingGear):
+        return macros.expand_internal_ring_gear(cmd)
+    if isinstance(cmd, SprocketIso):
+        return macros.expand_sprocket_iso(cmd)
+    if isinstance(cmd, GearMeshCheck):
+        return macros.expand_gear_mesh_check(cmd, session)
     return None
 
 

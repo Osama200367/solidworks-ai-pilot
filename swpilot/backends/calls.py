@@ -1367,6 +1367,202 @@ def save_drawing_calls(path: str) -> list[CallSpec]:
     ]
 
 
+# --------------------------------------------------------------------------
+# Curve builders (v0.5): spline / arc / line / revolve / helix
+# --------------------------------------------------------------------------
+
+
+def draw_spline_calls(points: list[tuple[float, float]]) -> list[CallSpec]:
+    """Interpolating spline through points (ISketchManager.CreateSpline).
+
+    CreateSpline takes a flat (x, y, z) point array in meters. The point
+    count and coordinates are exactly what the twin computed — the spline
+    FIT to those points is the Windows-verified part.
+    """
+    flat: list[float] = []
+    for x, y in points:
+        flat += [x * MM_TO_M, y * MM_TO_M, 0.0]
+    return [
+        CallSpec(
+            target="Model.SketchManager",
+            method="CreateSpline",
+            args=(tuple(flat),),
+            check="non_null",
+            note=f"spline through {len(points)} points",
+        ),
+    ]
+
+
+def draw_arc_calls(
+    center: tuple[float, float],
+    start: tuple[float, float],
+    end: tuple[float, float],
+    ccw: bool,
+) -> list[CallSpec]:
+    """Circular arc (ISketchManager.CreateArc: center, start, end, dir)."""
+    return [
+        CallSpec(
+            target="Model.SketchManager",
+            method="CreateArc",
+            args=(
+                center[0] * MM_TO_M, center[1] * MM_TO_M, 0.0,
+                start[0] * MM_TO_M, start[1] * MM_TO_M, 0.0,
+                end[0] * MM_TO_M, end[1] * MM_TO_M, 0.0,
+                1 if ccw else -1,
+            ),
+            check="non_null",
+            note=f"arc center {center} {'CCW' if ccw else 'CW'}",
+        ),
+    ]
+
+
+def draw_line_calls(
+    start: tuple[float, float], end: tuple[float, float]
+) -> list[CallSpec]:
+    return [
+        CallSpec(
+            target="Model.SketchManager",
+            method="CreateLine",
+            args=(
+                start[0] * MM_TO_M, start[1] * MM_TO_M, 0.0,
+                end[0] * MM_TO_M, end[1] * MM_TO_M, 0.0,
+            ),
+            check="non_null",
+            note=f"line {start} -> {end}",
+        ),
+    ]
+
+
+# swconst.swEndConditions_e for revolve direction types (blind angle).
+SW_REVOLVE_BLIND = 0
+
+
+def revolve_calls(
+    axis_feature: str, angle_deg: float, reverse: bool, name: str
+) -> list[CallSpec]:
+    """Select a reference axis, then FeatureRevolve2 the active sketch.
+
+    IFeatureManager.FeatureRevolve2 (20 params): a solid, non-thin,
+    non-cut revolve by a blind angle about the selected axis. The two
+    OffsetDistance doubles (positions 13-14, after OffsetReverse1/2) are
+    part of the documented signature — omitting them shifts every later
+    argument and the call fails.
+    """
+    return [
+        *_end_sketch_edits(),
+        CallSpec(
+            target="Model.Extension",
+            method="SelectByID2",
+            args=(axis_feature, "AXIS", 0.0, 0.0, 0.0, True, 0, None, 0),
+            check="truthy",
+            note=f"select '{axis_feature}' as the revolve axis",
+        ),
+        CallSpec(
+            target="Model.FeatureManager",
+            method="FeatureRevolve2",
+            args=(
+                True,   # SingleDir
+                True,   # IsSolid
+                False,  # IsThin
+                False,  # IsCut
+                reverse,  # ReverseDir
+                False,  # BothDirectionUpToSameEntity
+                SW_REVOLVE_BLIND,  # Dir1Type
+                SW_REVOLVE_BLIND,  # Dir2Type
+                math.radians(angle_deg),  # Dir1Angle
+                0.0,    # Dir2Angle
+                False, False,  # OffsetReverse1/2
+                0.0, 0.0,  # OffsetDistance1/2
+                0,      # ThinType
+                0.0, 0.0,  # ThinThickness1/2
+                True,   # Merge
+                False,  # UseFeatScope
+                True,   # UseAutoSelect
+            ),
+            check="non_null",
+            remember=True,
+            note=f"revolve {angle_deg}° about {axis_feature}",
+        ),
+        rename_last_feature(name),
+    ]
+
+
+def helix_thread_calls(
+    diameter_mm: float,
+    pitch_mm: float,
+    length_mm: float,
+    right_handed: bool,
+    revolutions: float,
+    name: str,
+    plane_display: str = "Front Plane",
+) -> list[CallSpec]:
+    """A cosmetic helix guide curve (least-verified surface of v0.5).
+
+    Opens a sketch on a plane, draws the base circle at the thread
+    diameter, CLOSES the sketch (leaving it selected), then builds the
+    helix with IModelDoc2.InsertHelix (by pitch & revolutions) consuming
+    that selected circle. This emits only the helix CURVE — the visible
+    triangular thread rib would be a separate profile + SweepFeature,
+    which is deferred: the whole helix/sweep surface is Windows-verified
+    and cosmetic, never load-bearing. The 3rd InsertHelix argument is
+    Clockwise (mapped from right_handed); confirm the handedness live.
+    """
+    return [
+        # open a sketch for the base circle
+        CallSpec(
+            target="Model.Extension",
+            method="SelectByID2",
+            args=(plane_display, "PLANE", 0.0, 0.0, 0.0, False, 0, None, 0),
+            check="truthy",
+            note=f"select plane '{plane_display}' for the helix base circle",
+        ),
+        CallSpec(
+            target="Model.SketchManager",
+            method="InsertSketch",
+            args=(True,),
+            note="open the helix base-circle sketch",
+        ),
+        CallSpec(
+            target="Model.SketchManager",
+            method="CreateCircleByRadius",
+            args=(0.0, 0.0, 0.0, (diameter_mm / 2.0) * MM_TO_M),
+            check="non_null",
+            note=f"helix base circle Ø{diameter_mm} mm",
+        ),
+        # close the sketch (toggle out of sketch mode) — it stays selected,
+        # and InsertHelix consumes the selected circle. Do NOT ClearSelection.
+        CallSpec(
+            target="Model.SketchManager",
+            method="InsertSketch",
+            args=(True,),
+            note="close the base-circle sketch (stays selected for InsertHelix)",
+        ),
+        # IModelDoc2.InsertHelix(ByPitchAndRevolution, ReverseDirection,
+        #   Clockwise, TaperHelix, TaperAngle, Height, Pitch, Revolution,
+        #   StartAngle) — cosmetic; exact form/handedness Windows-verified.
+        CallSpec(
+            target="Model",
+            method="InsertHelix",
+            args=(
+                True,            # by pitch & revolutions
+                False,           # reverse direction
+                not right_handed,  # Clockwise (RH helix is CCW)
+                False,           # taper
+                0.0,             # taper angle
+                length_mm * MM_TO_M,
+                pitch_mm * MM_TO_M,
+                revolutions,
+                0.0,             # start angle
+            ),
+            check="non_null",
+            remember=True,
+            note=f"cosmetic helix curve: pitch {pitch_mm} mm × {revolutions:.2f} rev "
+            f"({'RH' if right_handed else 'LH'}) — Windows-verified; rib sweep deferred",
+        ),
+        rename_last_feature(name),
+    ]
+
+
 def finalize_calls() -> list[CallSpec]:
     return [
         CallSpec(

@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.5",
+  "commands": [
+    {
+      "op": "involute_spur_gear",
+      "name": "gear_20t",
+      "module": 2,
+      "teeth": 20,
+      "pressure_angle": 20,
+      "face_width": 20,
+      "bore": 16,
+      "keyway": { "width": 5, "depth": 2.3 }
+    },
+    { "op": "save_part", "path": "gear_20t.SLDPRT" }
+  ]
+}

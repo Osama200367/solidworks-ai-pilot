@@ -16,9 +16,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from swpilot.model import curves as cv
 from swpilot.model import geometry as g
 from swpilot.model.planes import (
     AXIS_VECTORS,
+    NORMAL_AXIS,
     AxisName,
     PlaneFamily,
     PlaneFrame,
@@ -84,7 +86,15 @@ class SketchRec:
     name: str
     frame: PlaneFrame
     entities: list[g.Shape] = field(default_factory=list)
+    # A curved sketch carries a closed segment loop (splines/arcs/lines)
+    # instead of prismatic entities — the two never mix in one sketch.
+    curve_loop: list[cv.ProfileSeg] = field(default_factory=list)
+    curve_kind: str | None = None  # "gear_tooth" | "revolve" | ...
     consumed_by: str | None = None
+
+    @property
+    def is_curved(self) -> bool:
+        return bool(self.curve_loop)
 
 
 @dataclass
@@ -102,10 +112,29 @@ class FeatureRec:
     # so they stay typed and out of report summaries.
     instance_boss_footprints: list[tuple[PlaneFamily, g.Shape]] = field(default_factory=list)
     instance_cut_footprints: list[tuple[PlaneFamily, g.Shape]] = field(default_factory=list)
+    # Curved-feature envelope (gears/sprockets/revolves): the twin can't
+    # reduce a spline profile to a box, so it carries a bounding annulus/
+    # cylinder instead. `curve_full_disk` marks a curved circular pattern
+    # whose envelope is a full disk of `curve_radius` (a whole gear).
+    curved: bool = False
+    curve_radius: float | None = None  # max radial extent about the sketch origin
+    curve_full_disk: bool = False
+    curve_frame: PlaneFrame | None = None
+    curve_depth: float | None = None
+    curve_reverse: bool = False
+    curve_bbox: tuple[float, float, float, float] | None = None  # sketch u/v
+    # A solid of revolution: ±curve_radius on the two axes perpendicular to
+    # curve_revolve_axis, spanning curve_axial along it.
+    curve_revolve_axis: AxisName | None = None
+    curve_axial: tuple[float, float] | None = None
 
     @property
     def direction_sign(self) -> float:
         return -1.0 if self.reverse else 1.0
+
+    @property
+    def curve_sign(self) -> float:
+        return -1.0 if self.curve_reverse else 1.0
 
 
 class ModelTracker:
@@ -120,6 +149,9 @@ class ModelTracker:
         # Feature count at the last save; drawings compare against it to
         # warn when the saved file is stale.
         self.saved_feature_marker: int | None = None
+        # Gear invariants (set by the involute_spur_gear macro) let
+        # assemblies verify a mesh between two gear components.
+        self.gear: cv.GearInvariants | None = None
         self._warnings: list[str] = []
         self._sketch_n = 0
         self._counters: dict[str, int] = {}
@@ -263,6 +295,8 @@ class ModelTracker:
     def feature_aabb(self, name: str) -> tuple[Vec3, Vec3]:
         """World axis-aligned bounding box of a boss/cut feature, mm."""
         f = self.feature(name)
+        if f.curved:
+            return self._curved_aabb(f)
         if f.sketch is None or f.kind not in ("boss", "cut"):
             raise ModelError(f"feature {name!r} ({f.kind}) has no boundable geometry")
         frame = f.sketch.frame
@@ -291,6 +325,56 @@ class ModelTracker:
         mins = tuple(min(c[i] for c in corners) for i in range(3))
         maxs = tuple(max(c[i] for c in corners) for i in range(3))
         return (mins[0], mins[1], mins[2]), (maxs[0], maxs[1], maxs[2])
+
+    def _curved_aabb(self, f: FeatureRec) -> tuple[Vec3, Vec3]:
+        """World AABB of a curved feature via its bounding annulus/disk."""
+        if f.curve_revolve_axis is not None:
+            # Solid of revolution: ±radius on the two perpendicular world
+            # axes, axial extent along the revolve axis.
+            assert f.curve_radius is not None and f.curve_axial is not None
+            ai = {"x": 0, "y": 1, "z": 2}[f.curve_revolve_axis]
+            r = f.curve_radius
+            lo = [-r, -r, -r]
+            hi = [r, r, r]
+            lo[ai], hi[ai] = f.curve_axial
+            return (lo[0], lo[1], lo[2]), (hi[0], hi[1], hi[2])
+        frame = f.curve_frame
+        if frame is None or (not f.curve_full_disk and f.curve_bbox is None):
+            raise ModelError(
+                f"feature {f.name!r}: curved feature has no boundable envelope"
+            )
+        if f.curve_full_disk:  # a whole gear/sprocket: full disk of curve_radius
+            r = f.curve_radius or 0.0
+            us = vs = (-r, r)
+        else:
+            assert f.curve_bbox is not None
+            xmin, ymin, xmax, ymax = f.curve_bbox
+            us, vs = (xmin, xmax), (ymin, ymax)
+        depth = f.curve_depth or 0.0
+        n0, n1 = sorted((0.0, f.curve_sign * depth))
+        corners = [
+            frame.to_world(uu, vv, nn)
+            for uu in us
+            for vv in vs
+            for nn in (n0, n1)
+        ]
+        mins = tuple(min(c[i] for c in corners) for i in range(3))
+        maxs = tuple(max(c[i] for c in corners) for i in range(3))
+        return (mins[0], mins[1], mins[2]), (maxs[0], maxs[1], maxs[2])
+
+    def solid_features(self) -> list[str]:
+        """Names of features that add material and have a boundable AABB.
+
+        Prismatic bosses, curved bosses, and curved circular patterns
+        (whole gears). Used by assemblies to bound a curved component.
+        """
+        return [
+            f.name
+            for f in self.features
+            if (f.kind == "boss" and not f.curved)
+            or (f.curved and f.kind == "boss")
+            or f.curve_full_disk
+        ]
 
     # -- operations ----------------------------------------------------
 
@@ -340,6 +424,11 @@ class ModelTracker:
 
     def _add_entity(self, shape: g.Shape, op: str) -> None:
         sketch = self._require_active_sketch(op)
+        if sketch.curve_loop:
+            raise ModelError(
+                f"{op}: sketch {sketch.name} already has a curved profile (spline/"
+                "arc/line); prismatic entities cannot share a sketch with curves"
+            )
         for existing in sketch.entities:
             if not g.valid_contour_pair(existing, shape):
                 raise ModelError(
@@ -364,6 +453,45 @@ class ModelTracker:
             raise ModelError("draw_slot: start and end coincide; use draw_circle instead")
         self._add_entity(slot, "draw_slot")
 
+    # -- curve entities (v0.5) -----------------------------------------
+
+    def _add_curve_seg(self, seg: cv.ProfileSeg, op: str, kind: str | None) -> None:
+        sketch = self._require_active_sketch(op)
+        if sketch.entities:
+            raise ModelError(
+                f"{op}: sketch {sketch.name} already has prismatic entities; a curved "
+                "profile (spline/arc/line) cannot share a sketch with rectangles/"
+                "circles/slots"
+            )
+        sketch.curve_loop.append(seg)
+        if kind is not None:
+            sketch.curve_kind = kind
+
+    def draw_spline(self, points: list[tuple[float, float]], kind: str | None = None) -> None:
+        if len(points) < 2:
+            raise ModelError("draw_spline: need at least 2 points")
+        self._add_curve_seg(cv.SplineSeg(points=tuple(points)), "draw_spline", kind)
+
+    def draw_arc(
+        self,
+        center: tuple[float, float],
+        start: tuple[float, float],
+        end: tuple[float, float],
+        ccw: bool,
+        kind: str | None = None,
+    ) -> None:
+        self._add_curve_seg(
+            cv.ArcSeg(center=center, start=start, end=end, ccw=ccw), "draw_arc", kind
+        )
+
+    def draw_line(
+        self,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        kind: str | None = None,
+    ) -> None:
+        self._add_curve_seg(cv.LineSeg(start=start, end=end), "draw_line", kind)
+
     def _consume_sketch(self, op: str) -> SketchRec:
         sketch = self._require_active_sketch(op)
         if not sketch.entities:
@@ -372,6 +500,10 @@ class ModelTracker:
         return sketch
 
     def extrude(self, depth: float, reverse: bool) -> FeatureRec:
+        active = self._require_active_sketch("extrude")
+        if active.is_curved:
+            sketch = self._consume_curved_sketch("extrude")
+            return self._extrude_curved(sketch, depth, reverse)
         sketch = self._consume_sketch("extrude")
         feature = FeatureRec(
             name=self._next_name("boss"),
@@ -382,6 +514,104 @@ class ModelTracker:
         )
         sketch.consumed_by = feature.name
         feature.edges = self._derive_boss_edges(feature)
+        self.features.append(feature)
+        return feature
+
+    def _consume_curved_sketch(self, op: str) -> SketchRec:
+        sketch = self._require_active_sketch(op)
+        if not sketch.curve_loop:
+            raise ModelError(f"{op}: active sketch {sketch.name} has no curve segments")
+        if not cv.loop_is_closed(sketch.curve_loop, tol=1e-4):
+            self._warn(
+                f"{op}: the curved profile in {sketch.name} does not close cleanly in "
+                "the twin (segment endpoints differ); SolidWorks will reject an open "
+                "profile — verify the generated point set on Windows"
+            )
+        self.active_sketch = None
+        return sketch
+
+    def _extrude_curved(self, sketch: SketchRec, depth: float, reverse: bool) -> FeatureRec:
+        # already consumed by extrude(); record the curved boss + envelope.
+        bbox = cv.segments_bbox(sketch.curve_loop)
+        _, rmax = cv.segments_radial_extent(sketch.curve_loop)
+        feature = FeatureRec(
+            name=self._next_name("boss"),
+            kind="boss",
+            sketch=sketch,
+            depth_mm=depth,
+            reverse=reverse,
+            curved=True,
+            curve_radius=rmax,
+            curve_frame=sketch.frame,
+            curve_depth=depth,
+            curve_reverse=reverse,
+            curve_bbox=bbox,
+        )
+        sketch.consumed_by = feature.name
+        self.features.append(feature)
+        return feature
+
+    def revolve(self, axis: AxisName, angle: float, reverse: bool) -> FeatureRec:
+        """Solid of revolution of the active (prismatic or curved) sketch."""
+        self._require_part("revolve")
+        sketch = self._require_active_sketch("revolve")
+        frame = sketch.frame
+        axis_vec = AXIS_VECTORS[axis]
+        if abs(abs(dot(axis_vec, frame.normal))) > EPS:
+            raise ModelError(
+                f"revolve: the revolve axis {axis!r} must lie IN the sketch plane "
+                f"(sketch normal is {NORMAL_AXIS[frame.family]!r}); pick an in-plane axis"
+            )
+        # profile points in sketch (u, v); the axis maps to one of them.
+        au, av = dot(axis_vec, frame.u), dot(axis_vec, frame.v)
+        if sketch.is_curved:
+            sketch = self._consume_curved_sketch("revolve")
+            pts = cv.segments_points(sketch.curve_loop)
+        else:
+            sketch = self._consume_sketch("revolve")
+            pts = _prismatic_profile_points(sketch.entities)
+        # The revolve axis is a world axis through the ORIGIN, but the sketch
+        # plane may be offset along its normal. The signed in-plane distance
+        # from the axis line is (-av)u + au·v; the true distance from the
+        # world axis also folds in the plane offset (perpendicular to the
+        # in-plane axis): √(in_plane² + offset²). A profile only crosses the
+        # world axis when the axis actually lies IN the plane (offset ≈ 0).
+        off = frame.offset
+        radials = [(-av) * u + au * v for (u, v) in pts]  # signed, in-plane
+        axials = [au * u + av * v for (u, v) in pts]
+        if abs(off) <= EPS and min(radials) < -EPS and max(radials) > EPS:
+            raise ModelError(
+                "revolve: the profile crosses the revolve axis; a solid of revolution "
+                "needs the whole profile on one side of the axis"
+            )
+        import math as _math
+
+        rmax = max(_math.hypot(r, off) for r in radials)
+        feature = FeatureRec(
+            name=self._next_name("boss"),
+            kind="boss",
+            sketch=sketch,
+            depth_mm=None,
+            reverse=reverse,
+            curved=True,
+            curve_radius=rmax,
+            curve_frame=frame,
+            curve_depth=max(axials) - min(axials),
+            curve_reverse=reverse,
+            curve_bbox=cv.segments_bbox([cv.SplineSeg(points=tuple(pts))]),
+            curve_revolve_axis=axis,
+            curve_axial=(min(axials), max(axials)),
+        )
+        self._require_axis("revolve", axis)
+        feature.detail["revolve_axis"] = axis
+        feature.detail["revolve_angle"] = angle
+        feature.detail["max_radius"] = rmax
+        sketch.consumed_by = feature.name
+        if angle < 360.0 - EPS:
+            self._warn(
+                f"revolve: partial revolve ({angle}°); the twin bounds it as the full "
+                "annulus (exact partial sweep is Windows-verified)"
+            )
         self.features.append(feature)
         return feature
 
@@ -397,6 +627,8 @@ class ModelTracker:
             raise ModelError(
                 "cut_extrude: there is no solid material to cut; extrude a base feature first"
             )
+        if sketch.is_curved:
+            return self._cut_curved(sketch, through_all, depth, reverse)
         if not sketch.entities:
             raise ModelError(
                 f"cut_extrude: active sketch {sketch.name} is empty; draw something first"
@@ -414,6 +646,38 @@ class ModelTracker:
         )
         sketch.consumed_by = feature.name
         feature.edges = self._derive_cut_edges(feature)
+        self.features.append(feature)
+        return feature
+
+    def _cut_curved(
+        self, sketch: SketchRec, through_all: bool, depth: float | None, reverse: bool
+    ) -> FeatureRec:
+        """A curved cut (e.g. a ring-gear tooth space): envelope-recorded.
+
+        The twin can't validate spline-bounded material containment, so it
+        records the cut and warns that exact intersection is Windows-
+        verified — never a silent pass.
+        """
+        sketch = self._consume_curved_sketch("cut_extrude")
+        self._warn(
+            "cut_extrude: curved cut profile — the twin cannot verify it stays inside "
+            "material (spline containment is Windows-verified); check the solid on "
+            "Windows"
+        )
+        feature = FeatureRec(
+            name=self._next_name("cut"),
+            kind="cut",
+            sketch=sketch,
+            depth_mm=depth,
+            through_all=through_all,
+            reverse=reverse,
+            curved=True,
+            curve_frame=sketch.frame,
+            curve_depth=depth,
+            curve_reverse=reverse,
+            curve_bbox=cv.segments_bbox(sketch.curve_loop),
+        )
+        sketch.consumed_by = feature.name
         self.features.append(feature)
         return feature
 
@@ -537,13 +801,13 @@ class ModelTracker:
                 (shape.xmax, shape.ymax),
                 (shape.xmin, shape.ymax),
             ]
-            for j, (cu, cv) in enumerate(corners):
+            for j, (cu, cvert) in enumerate(corners):
                 edges.append(
                     EdgeRec(
                         id=f"{f.name}:vertical_corners:{i}.{j}",
                         feature=f.name,
                         group="vertical_corners",
-                        midpoint=frame.to_world(cu, cv, (near + far) / 2.0),
+                        midpoint=frame.to_world(cu, cvert, (near + far) / 2.0),
                         length_mm=depth,
                         # Hard bound for ONE corner alone: the full smaller
                         # side. Selecting several corners together triggers
@@ -930,6 +1194,27 @@ class ModelTracker:
         for seed in seeds:
             assert seed.sketch is not None
             frame = seed.sketch.frame
+            if seed.curved:
+                # A curved seed (a gear/sprocket tooth) can't be footprint-
+                # rotated. A BOSS seed's pattern is the whole gear — a disk
+                # of the tooth's tip radius — so record that envelope. A CUT
+                # seed (ring-gear space, sprocket gap) adds no material and
+                # bounds nothing, so leave the pattern un-curved: feature_aabb
+                # then reports "no boundable geometry" instead of asserting on
+                # an unset curve_bbox.
+                if abs(abs(dot(axis_vec, frame.normal)) - 1.0) > EPS:
+                    self._warn(
+                        f"circular_pattern: axis {axis!r} is not normal to the curved "
+                        f"seed {seed.name}'s plane; the gear envelope may be wrong"
+                    )
+                if seed.kind == "boss":
+                    feature.curved = True
+                    feature.curve_full_disk = True
+                    feature.curve_radius = seed.curve_radius
+                    feature.curve_frame = seed.curve_frame
+                    feature.curve_depth = seed.curve_depth
+                    feature.curve_reverse = seed.curve_reverse
+                continue
             if abs(abs(dot(axis_vec, frame.normal)) - 1.0) > EPS:
                 self._warn(
                     f"circular_pattern: axis {axis!r} is not normal to {seed.name}'s "
@@ -969,6 +1254,44 @@ class ModelTracker:
         return feature
 
     # -- save / finalize / summary -------------------------------------
+
+    def set_gear(self, invariants: cv.GearInvariants) -> None:
+        self._require_part("gear_meta")
+        self.gear = invariants
+
+    def helix_thread(
+        self,
+        diameter: float,
+        pitch: float,
+        length: float,
+        right_handed: bool,
+        on_feature: str | None = None,
+    ) -> FeatureRec:
+        self._require_part("helix_thread")
+        if not self.has_solid:
+            raise ModelError(
+                "helix_thread: there is no solid to thread; build a cylindrical boss first"
+            )
+        if on_feature is not None:
+            self.feature(on_feature)  # validate it exists (raises if not)
+            self._warn(
+                f"helix_thread: on_feature={on_feature!r} names the intended target, but "
+                "v0.5 places the cosmetic helix on the front plane at the origin; the "
+                "swept rib and its placement on that boss are Windows-verified"
+            )
+        cv.helix_spec(diameter, pitch, length, right_handed)  # validates pitch > 0
+        self._warn(
+            "helix_thread: cosmetic swept thread — not a load-bearing thread form; the "
+            "swept solid's validity is Windows-verified"
+        )
+        self._counters["helix"] = self._counters.get("helix", 0) + 1
+        feature = FeatureRec(name=f"Helix{self._counters['helix']}", kind="helix")
+        feature.detail["diameter"] = diameter
+        feature.detail["pitch"] = pitch
+        feature.detail["length"] = length
+        feature.detail["right_handed"] = right_handed
+        self.features.append(feature)
+        return feature
 
     def save_part(self, path: str) -> None:
         import os
@@ -1050,6 +1373,19 @@ def _dist3(a: Vec3, b: Vec3) -> float:
     import math
 
     return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+
+
+def _prismatic_profile_points(entities: list[g.Shape]) -> list[tuple[float, float]]:
+    """Corner/extent points of prismatic sketch entities (for revolve)."""
+    pts: list[tuple[float, float]] = []
+    for s in entities:
+        if isinstance(s, g.Rect):
+            pts += [(s.xmin, s.ymin), (s.xmax, s.ymin), (s.xmax, s.ymax), (s.xmin, s.ymax)]
+        elif isinstance(s, g.Circle):
+            pts += [(s.cx - s.r, s.cy), (s.cx + s.r, s.cy), (s.cx, s.cy - s.r), (s.cx, s.cy + s.r)]
+        else:
+            pts += [(s.x1, s.y1), (s.x2, s.y2)]
+    return pts
 
 
 def _describe(shape: g.Shape) -> str:

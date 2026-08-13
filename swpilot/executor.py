@@ -25,17 +25,23 @@ from swpilot.commands.schema import (
     CreatePlane,
     CreateSketch,
     CutExtrude,
+    DrawArc,
     DrawCircle,
+    DrawLine,
     DrawRectangle,
     DrawSlot,
+    DrawSpline,
     Extrude,
     Fillet,
+    GearMeta,
+    HelixThread,
     InsertComponent,
     IsometricView,
     LinearPattern,
     Mate,
     NewAssembly,
     NewPart,
+    Revolve,
     SaveAssembly,
     SaveDrawing,
     SavePart,
@@ -222,6 +228,21 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
             c.equal_spacing,
             res.feature_name,
         )
+    elif isinstance(c, DrawSpline):
+        backend.draw_spline(list(c.points))
+    elif isinstance(c, DrawArc):
+        backend.draw_arc(c.center, c.start, c.end, c.ccw)
+    elif isinstance(c, DrawLine):
+        backend.draw_line(c.start, c.end)
+    elif isinstance(c, Revolve):
+        assert res.feature_name is not None and res.axis_feature is not None
+        backend.revolve(res.axis_feature, c.angle, c.reverse, res.feature_name)
+    elif isinstance(c, HelixThread):
+        assert res.feature_name is not None
+        rev = c.length / c.pitch
+        backend.helix_thread(c.diameter, c.pitch, c.length, c.right_handed, rev, res.feature_name)
+    elif isinstance(c, GearMeta):
+        pass  # twin bookkeeping only; no COM calls
     elif isinstance(c, SavePart):
         backend.save_part(c.path)
     else:  # pragma: no cover - schema and executor must stay in sync
@@ -231,7 +252,7 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
 def execute(
     expanded: list[ExpandedCommand],
     backend: Backend,
-    schema_version: str = "0.4",
+    schema_version: str = "0.5",
 ) -> RunReport:
     session = SessionTracker()
     results: list[CommandResult] = []

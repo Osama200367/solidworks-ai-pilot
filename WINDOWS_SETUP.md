@@ -172,6 +172,61 @@ exercises everything), then `examples/bracket_drawing.json`.
    `top`, `right`, `iso`, `section_A` in the tree; projected-view
    selection (`SelectByID2(..., "DRAWINGVIEW", ...)`) depends on it.
 
+## v0.5 smoke-test checklist (the curves engine)
+
+The curve COM surface is the riskiest yet. CI proves all the gear/
+sprocket/revolve **math** (pitch/base/tip/root diameters, tooth count,
+mesh, ISO-606 formulas) and that the mock/COM call plans are identical;
+it **cannot** prove any of the following — each needs the live run.
+Run `examples/spur_gear_m2_z20.json`, then `gear_mesh_check.json`, then
+`v_pulley_revolved.json`.
+
+1. **Spline fit fidelity** — `SketchManager.CreateSpline` must interpolate
+   the involute point set (18 points/flank, in meters) within tolerance so
+   the flank *is* a true involute, not a wandering B-spline. The point
+   array is passed as a `VT_ARRAY|VT_R8` VARIANT (the COM backend wraps it;
+   a bare tuple marshals as a variant array SolidWorks rejects) — if
+   CreateSpline still returns null, that wrapping is the first suspect.
+   Measure the built flank's pressure angle at the pitch circle against
+   20°; a visibly wavy flank means the point count in
+   `curves.spur_gear_tooth` needs raising or `CreateSpline` needs the
+   tangency variant.
+2. **Closed extrudable tooth profile** — the tooth loop is
+   `arc → spline → arc(tip) → spline → arc → arc(root)`; SolidWorks must
+   see it as ONE closed contour and boss-extrude it. A "self-intersecting"
+   or "open contour" error means the generated segment endpoints don't
+   meet on Windows within SW's sketch tolerance (they meet to 1e-6 mm in
+   the twin — see `curves.loop_is_closed`).
+3. **Root fillet tangency** — the tangent-arc fillet (radius ≈ 0.38·m)
+   must blend flank→root without a gap or overlap. If the fillet leaves a
+   notch, the radial-line/fillet split in `curves.spur_gear_tooth`'s
+   `root_region` needs adjusting for that module.
+4. **Circular pattern of the tooth** — `FeatureCircularPattern4` of the
+   single tooth boss must produce z clean teeth merged into the root
+   cylinder with no missing/doubled tooth at the 360° seam (the twin
+   divides 360/z; SolidWorks must agree).
+5. **`FeatureRevolve2`** — the 18-argument revolve of the pulley
+   half-section about `SWPilot_Axis_X` must yield a valid solid of
+   revolution. A "self-intersection" error means the profile touches the
+   axis on Windows (the twin already rejects a profile that *crosses* the
+   axis; a profile that merely *touches* it revolves to a knife-edge).
+6. **Internal ring-gear cut** — the involute tooth-space cut must remove
+   material inward from the rim without over/under-cutting; the twin can
+   only envelope-check a curved cut (it warns so).
+7. **Cosmetic helix (`InsertHelix`)** — the LEAST-verified surface of the
+   phase. The call opens a base-circle sketch, closes it (leaving it
+   selected), and calls `IModelDoc2.InsertHelix` (by pitch & revolutions)
+   on that circle — v0.5 emits only the helix CURVE; the visible triangular
+   rib (a profile + `SweepFeature`) is deferred. Confirm the `InsertHelix`
+   argument order and that the 3rd argument (`Clockwise`, mapped from
+   `right_handed`) gives the intended handedness. Treat a helix failure as
+   expected-to-iterate, not a regression. It is cosmetic — never rely on it
+   for a real thread.
+8. **Reference-axis revolve selection** — `SelectByID2(..., "AXIS", ...)`
+   must resolve the `SWPilot_Axis_X` reference axis created by
+   `create_axis`; if it fails, the axis feature name or the selection type
+   is the suspect.
+
 ## What runs where
 
 | layer | cloud/CI | Windows |

@@ -21,12 +21,17 @@ from swpilot.commands.schema import (
     CreatePlane,
     CreateSketch,
     CutExtrude,
+    DrawArc,
     DrawCircle,
+    DrawLine,
     DrawRectangle,
     DrawSlot,
+    DrawSpline,
     EdgeNearPoint,
     Extrude,
     Fillet,
+    GearMeta,
+    HelixThread,
     InsertComponent,
     IsometricView,
     LinearPattern,
@@ -36,6 +41,7 @@ from swpilot.commands.schema import (
     MateFace,
     NewAssembly,
     NewPart,
+    Revolve,
     SaveAssembly,
     SaveDrawing,
     SavePart,
@@ -43,6 +49,7 @@ from swpilot.commands.schema import (
     SmartDimensions,
     StandardViews,
 )
+from swpilot.model import curves
 from swpilot.model.assembly import AssemblyTracker, ResolvedEntity
 from swpilot.model.drawing import (
     SHEET_MARGIN,
@@ -54,7 +61,7 @@ from swpilot.model.drawing import (
     ViewSpec,
 )
 from swpilot.model.session import SessionTracker
-from swpilot.model.tracker import EdgeRec, ModelError
+from swpilot.model.tracker import AXIS_FEATURE_NAMES, EdgeRec, ModelError
 from swpilot.model.transforms import RotationStep, Transform, build_transform
 
 PrimitiveT = (
@@ -83,6 +90,12 @@ PrimitiveT = (
     | SectionView
     | SmartDimensions
     | SaveDrawing
+    | DrawSpline
+    | DrawArc
+    | DrawLine
+    | Revolve
+    | HelixThread
+    | GearMeta
 )
 
 
@@ -302,6 +315,28 @@ def apply_to_session(session: SessionTracker, cmd: PrimitiveT) -> ApplyResult:
         session.active_part("draw_circle").draw_circle(cmd.center, cmd.diameter)
     elif isinstance(cmd, DrawSlot):
         session.active_part("draw_slot").draw_slot(cmd.start, cmd.end, cmd.width)
+    elif isinstance(cmd, DrawSpline):
+        session.active_part("draw_spline").draw_spline(list(cmd.points), cmd.kind)
+    elif isinstance(cmd, DrawArc):
+        session.active_part("draw_arc").draw_arc(
+            cmd.center, cmd.start, cmd.end, cmd.ccw, cmd.kind
+        )
+    elif isinstance(cmd, DrawLine):
+        session.active_part("draw_line").draw_line(cmd.start, cmd.end, cmd.kind)
+    elif isinstance(cmd, Revolve):
+        tracker = session.active_part("revolve")
+        result.feature_name = tracker.revolve(cmd.axis, cmd.angle, cmd.reverse).name
+        result.axis_feature = AXIS_FEATURE_NAMES[cmd.axis]
+    elif isinstance(cmd, HelixThread):
+        result.feature_name = (
+            session.active_part("helix_thread")
+            .helix_thread(cmd.diameter, cmd.pitch, cmd.length, cmd.right_handed, cmd.on_feature)
+            .name
+        )
+    elif isinstance(cmd, GearMeta):
+        tracker = session.active_part("gear_meta")
+        tp = curves.spur_gear_tooth(cmd.module, cmd.teeth, cmd.pressure_angle)
+        tracker.set_gear(tp.invariants)
     elif isinstance(cmd, Extrude):
         result.feature_name = (
             session.active_part("extrude").extrude(cmd.depth, cmd.reverse).name

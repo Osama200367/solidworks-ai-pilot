@@ -59,7 +59,7 @@ time, redundancy and under-constraint warn, and the bolt_circle macro
 builds fastener sets straight from hole features. Acceptance case: a
 manufacturable base + cover + M8 SHCS bolt circle saved as .SLDASM.
 
-### v0.4 — Engineering drawings ◀ current phase
+### v0.4 — Engineering drawings ✅ (merged)
 
 Dimensioned 2D sheets (.SLDDRW) from parts and assemblies — the final
 pre-LLM milestone. `create_drawing` (A4/A3, standard scale series with
@@ -74,10 +74,30 @@ every dimension attachment into exact sheet coordinates for selection.
 Acceptance cases: the v0.2 bracket sheet and a hollow flange with a
 section view proving internal bore dimensioning.
 
+### v0.5 — The curves engine ◀ current phase
+
+True swept and curved geometry the prismatic engine can't make.
+`involute_spur_gear` (the flagship: a real parametric involute flank +
+tangent root fillet + tip land, patterned z times on a root cylinder,
+with bore/hub/keyway), `internal_ring_gear` (involute teeth cut inward),
+`sprocket_iso` (ISO-606 roller-seating + flank profile), `revolve` (a
+generic solid of revolution — cones, grooves, radii, and the upgrade path
+for approximated catalog parts like the v-pulley), and a cosmetic
+`helix_thread`. The enabling design is a pure-math curve layer
+(`curves.py`) that emits both the exact invariants the digital twin
+verifies (pitch/base/tip/root diameters, tooth thickness, undercut, mesh)
+and the spline/arc/line profile the COM backend draws. The twin can't box
+a spline tooth, so a curved feature degrades gracefully to a bounding
+annulus/cylinder — validating all the engineering math and the envelope
+in CI while delegating spline fidelity and solid validity to Windows.
+Acceptance cases: a module-2 20-tooth gear meshing-checked against a
+module-2 40-tooth mate, and the v-pulley rebuilt with revolve to prove the
+approximation→real upgrade.
+
 ### v1.0 — LLM natural-language layer
 
 Natural language → `CommandFile` JSON, on top of the full vocabulary of
-v0.1–v0.4. `swpilot/llm/` fills in: prompt/tool schemas derived from the
+v0.1–v0.5. `swpilot/llm/` fills in: prompt/tool schemas derived from the
 pydantic models, iterative repair using validator and simulator errors as
 feedback (the same errors CI uses), and a conversational CLI. Everything
 downstream — validation, expansion, simulation, execution, reporting —

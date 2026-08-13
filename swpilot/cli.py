@@ -212,20 +212,25 @@ def ai(
 
     bundle = build_bundle(description)
     if mode is AiMode.copy_paste:
-        if out is not None:
-            out.write_text(bundle + "\n", encoding="utf-8")
-            typer.secho(f"prompt bundle written to {out}", fg=typer.colors.GREEN, err=True)
-            typer.secho(
-                "Paste it into any AI chat, then run:\n"
-                "  swpilot ai-apply <the-json-file>   (or --paste to read stdin)",
-                fg=typer.colors.CYAN,
-                err=True,
-            )
-        else:
-            typer.echo(bundle)
+        _emit_bundle(bundle, out)
         return
 
     _ai_api(description, bundle, backend, save, yes)
+
+
+def _emit_bundle(bundle: str, out: Path | None) -> None:
+    """Print the copy-paste prompt bundle to stdout, or write it to a file."""
+    if out is not None:
+        out.write_text(bundle + "\n", encoding="utf-8")
+        typer.secho(f"prompt bundle written to {out}", fg=typer.colors.GREEN, err=True)
+        typer.secho(
+            "Paste it into any AI chat, then run:\n"
+            "  swpilot ai-apply <the-json-file>   (or --paste to read stdin)",
+            fg=typer.colors.CYAN,
+            err=True,
+        )
+    else:
+        typer.echo(bundle)
 
 
 def _ai_api(
@@ -361,6 +366,132 @@ def _apply_command_file(
 
     report_path = Path("ai_run.report.json")
     _execute_and_report(cmd_file, expanded, backend, None, None, report_path)
+
+
+# --------------------------------------------------------------------------
+# Voice layer (v1.1)
+# --------------------------------------------------------------------------
+
+
+@app.command()
+def voice(
+    audio: Annotated[
+        Path | None,
+        typer.Argument(help="Audio file to transcribe (omit to record from the mic)"),
+    ] = None,
+    text: Annotated[
+        str | None,
+        typer.Option(
+            "--text",
+            help="Skip capture/transcription; normalize this transcript directly",
+        ),
+    ] = None,
+    mode: Annotated[
+        AiMode, typer.Option(help="copy-paste (any free chat) or api")
+    ] = AiMode.copy_paste,
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Write the prompt bundle here (copy-paste mode) instead of stdout"),
+    ] = None,
+    backend: Annotated[
+        BackendChoice, typer.Option(help="Execution backend (api mode)")
+    ] = BackendChoice.mock,
+    save: Annotated[
+        Path | None,
+        typer.Option(help="Write the validated CommandFile JSON here (api mode)"),
+    ] = None,
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Skip the confirmation prompt before execution")
+    ] = False,
+    record_seconds: Annotated[
+        float, typer.Option(help="Seconds to record when capturing from the mic")
+    ] = 8.0,
+    record_to: Annotated[
+        Path,
+        typer.Option(help="Where to save a mic recording"),
+    ] = Path("voice_capture.wav"),
+) -> None:
+    """Speak a part/assembly description; run it through the v1.0 pipeline.
+
+    Obtains a transcript (from --text, an audio file, or the mic), applies a
+    light Arabic/English dialect normalization, then hands the text to the
+    exact `swpilot ai` flow. With no transcription key configured it saves the
+    audio and prints offline instructions instead of hitting any paid service.
+    Voice never bypasses validation or the pre-execution confirmation.
+    """
+    transcript = text if text is not None else _obtain_transcript(audio, record_seconds, record_to)
+    if transcript is None:
+        return  # offline handoff already printed; nothing to execute
+
+    from swpilot.llm import build_bundle
+    from swpilot.voice import normalize
+
+    normalized = normalize(transcript)
+    if not normalized.strip():
+        typer.secho("no speech text to work with", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2)
+    typer.secho(f'heard: "{normalized}"', fg=typer.colors.CYAN, err=True)
+
+    bundle = build_bundle(normalized)
+    if mode is AiMode.copy_paste:
+        _emit_bundle(bundle, out)
+        return
+    _ai_api(normalized, bundle, backend, save, yes)
+
+
+def _obtain_transcript(
+    audio: Path | None, record_seconds: float, record_to: Path
+) -> str | None:
+    """Get a transcript from an audio file or the mic, or None for offline handoff.
+
+    Returns the transcript text on success; returns ``None`` (after printing
+    offline instructions) when no transcription endpoint is configured, so the
+    caller stops without executing anything.
+    """
+    from swpilot.voice import (
+        STTConfig,
+        STTConfigError,
+        STTRequestError,
+        VoiceCaptureError,
+        record_to_file,
+        transcribe_file,
+    )
+
+    audio_path = audio
+    if audio_path is None:
+        typer.secho(
+            f"recording {record_seconds:g}s from the microphone…",
+            fg=typer.colors.CYAN,
+            err=True,
+        )
+        try:
+            audio_path = record_to_file(record_to, seconds=record_seconds)
+        except VoiceCaptureError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1) from exc
+        typer.secho(f"saved recording to {audio_path}", fg=typer.colors.GREEN, err=True)
+
+    try:
+        config = STTConfig.from_env()
+    except STTConfigError as exc:
+        # Offline mode: never hit a paid service. Save/keep the audio and tell
+        # the user how to transcribe it with any free tool, then re-run.
+        typer.secho(
+            f"No transcription endpoint configured. Your audio is at: {audio_path}\n"
+            "Transcribe it with any free tool (phone dictation, a local Whisper, "
+            "an online recogniser), then run:\n"
+            f'  swpilot voice --text "<the transcript>"',
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+        typer.secho(f"(detail: {exc})", fg=typer.colors.YELLOW, err=True)
+        return None
+
+    try:
+        return transcribe_file(audio_path, config)
+    except STTRequestError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
 
 
 if __name__ == "__main__":

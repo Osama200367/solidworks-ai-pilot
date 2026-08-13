@@ -94,7 +94,7 @@ Acceptance cases: a module-2 20-tooth gear meshing-checked against a
 module-2 40-tooth mate, and the v-pulley rebuilt with revolve to prove the
 approximation→real upgrade.
 
-### v1.0 — LLM natural-language layer ◀ current phase
+### v1.0 — LLM natural-language layer ✅ (merged)
 
 Natural language → `CommandFile` JSON, on top of the full vocabulary of
 v0.1–v0.5, in Arabic or English. `swpilot/llm/` delivers it model-
@@ -115,3 +115,25 @@ confirmation before any execution. Everything downstream — validation,
 expansion, simulation, execution, reporting — is identical for LLM-authored
 and hand-written files. Acceptance cases: the Arabic gear request above runs
 1/1 through the mock, plus an assembly request and a plain plate.
+
+### v1.1 — Voice layer ◀ current phase
+
+*Speak* a part/assembly description (Arabic or English) instead of typing it,
+onto the same pipeline. `swpilot/voice/` is a thin front-end — capture +
+transcription only — that funnels into the exact v1.0 path (no new JSON path,
+no schema change). `swpilot voice` obtains a transcript from `--text`, an
+audio file, or the mic; applies a **light dialect normalization**; then hands
+the text to `swpilot ai`. Same two-mode philosophy: **offline/copy-paste** is
+the default — with no transcription key it saves the audio and prints
+instructions to transcribe with any free tool, never blocking on a paid
+service — while an optional **api mode** uses a Whisper-compatible endpoint
+(`SWPILOT_STT_*`). The normalization is a small, fully unit-tested mapping
+(not a model): spoken number words → digits (Arabic dialect + English), unit
+words → canonical (`ملم`→`mm`), a few dialect dimension terms, and — critically
+— it never *merges* two distinct numbers a speaker meant separately (`موديول
+اثنين عشرين سن` → `موديول 2 20 سن`, never `22`). **Safety unchanged:** the
+parsed command list is still shown for confirmation before any COM execution;
+voice never bypasses validation. Microphone capture is import-guarded and
+optional (`swpilot[voice]`); real mic capture and STT accuracy are verified
+only on hardware, while CI covers the file-path, transcription-plumbing, and
+normalization paths with recorded fixtures.

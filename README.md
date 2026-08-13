@@ -4,13 +4,15 @@ AI-powered automation layer for SolidWorks. A user describes a part in plain
 language, an LLM translates that into structured JSON commands, and SW-Pilot
 executes them in SolidWorks through its COM API.
 
-**Current scope (v1.0)**: the whole pipeline. A **natural-language layer**
-turns a plain-language part/assembly description — Arabic or English — into
-the same structured JSON the engine already validates, expands, and
-executes. It is deliberately model-agnostic: the primary **copy-paste mode**
-generates a self-contained prompt bundle you paste into *any* free AI chat
-(no API key), then pastes the reply back for validation; an optional **API
-mode** calls any OpenAI-compatible endpoint directly. Underneath sits the
+**Current scope (v1.1)**: the whole pipeline, now **voice-driven too**. You
+can *speak* a part/assembly description — Arabic or English — and it flows
+through the exact same path as typing it. A **natural-language layer**
+turns a plain-language description into the same structured JSON the engine
+already validates, expands, and executes. It is deliberately model-agnostic:
+the primary **copy-paste mode** generates a self-contained prompt bundle you
+paste into *any* free AI chat (no API key), then pastes the reply back for
+validation; an optional **API mode** calls any OpenAI-compatible endpoint
+directly. Underneath sits the
 JSON-command engine built over v0.1–v0.5: parts, assemblies, dimensioned 2D
 drawings, and a **curves engine** for true swept/curved geometry — real
 involute spur and internal ring gears, ISO-606 sprockets, a generic revolve,
@@ -52,6 +54,35 @@ real validator errors instead of executing anything. With an
 OpenAI-compatible endpoint configured (`SWPILOT_LLM_MODEL`,
 `SWPILOT_LLM_BASE_URL`, `SWPILOT_LLM_API_KEY`), `swpilot ai "…" --mode api`
 does the round-trip (with one auto-repair) for you.
+
+## Speak it instead (v1.1)
+
+`swpilot voice` is a thin front-end over the exact pipeline above — it only
+adds capture + transcription, then a light dialect normalization, and hands
+the text to `swpilot ai`. It never bypasses validation or the pre-execution
+confirmation.
+
+```bash
+# Already have a transcript (or typing it)? Normalize + run it:
+swpilot voice --text "بدي ترس موديول اثنين عشرين سن مع تجويف ستاشر وخابور"
+
+# Have an audio clip but no transcription key? Offline handoff:
+swpilot voice clip.wav          # saves/keeps the audio + prints how to transcribe
+#   → transcribe with any free tool, then: swpilot voice --text "<transcript>"
+
+# With a Whisper-compatible endpoint configured, it transcribes for you:
+export SWPILOT_STT_API_KEY=…    # + optional SWPILOT_STT_BASE_URL / _MODEL (whisper-1)
+swpilot voice clip.wav --mode api
+swpilot voice --mode api        # record from the mic (needs: pip install 'swpilot[voice]')
+```
+
+The **dialect-normalization** step maps spoken number words and units to
+canonical forms before the LLM — `عشرين`→`20`, `ستاشر`→`16`, `twenty five`→`25`,
+`ملم`→`mm` — and is careful *not* to merge two distinct numbers: `موديول اثنين
+عشرين سن` becomes `موديول 2 20 سن` (module 2, 20 teeth), never `22`. Actual
+microphone capture and real speech-to-text accuracy can only be verified on
+hardware; CI proves the file-path, transcription-plumbing, and normalization
+paths.
 
 ## Quick start (no SolidWorks needed)
 

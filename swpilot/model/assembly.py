@@ -304,15 +304,23 @@ class AssemblyTracker:
             return (p[0], p[1], p[2])
 
         blockers = _face_blockers(comp.part, l_axis, l_sign, l_pos, owner)
+        material = _face_material(comp.part, l_axis, l_sign, l_pos, owner)
         for u, v in candidates:
-            if not any(
+            pt = local_point(u, v)
+            blocked = any(
                 g.covers(shape, g.Circle(pu, pv, 0.2))
                 for shape, (pu, pv) in (
-                    (s, _project_uv(comp.part, s_frame_family, local_point(u, v)))
-                    for s, s_frame_family in blockers
+                    (s, _project_uv(comp.part, fam, pt)) for s, fam in blockers
                 )
-            ):
-                return local_point(u, v)
+            )
+            on_material = any(
+                g.covers(shape, g.Circle(pu, pv, 0.2))
+                for shape, (pu, pv) in (
+                    (s, _project_uv(comp.part, fam, pt)) for s, fam in material
+                )
+            )
+            if not blocked and on_material:
+                return pt
         self._warn(
             "mate: face pick point may fall inside a hole or under an adjoining "
             "boss; verify the selection on the first Windows run"
@@ -375,17 +383,37 @@ class AssemblyTracker:
     # -- mates ---------------------------------------------------------
 
     def _movable(self, a: ResolvedEntity, b: ResolvedEntity, axes: list[int]) -> str:
-        """Pick which component the solver moves: prefer b, skip fixed."""
+        """Pick which component the solver moves.
+
+        The component with MORE free axes among those the mate needs moves
+        (tie prefers b: "b moves to a"), so a mostly-pinned component is
+        never dragged when a free one is available.
+        """
         ca, cb = self.component(a.component), self.component(b.component)
         if a.component == b.component:
             raise ModelError(
                 f"mate: both entities belong to component {a.component!r}"
             )
-        if not cb.fixed and any(ax not in cb.pinned for ax in axes):
+
+        def free(c: ComponentRec) -> int:
+            return 0 if c.fixed else sum(1 for ax in axes if ax not in c.pinned)
+
+        fa, fb = free(ca), free(cb)
+        if fb >= fa and fb > 0:
             return cb.name
-        if not ca.fixed and any(ax not in ca.pinned for ax in axes):
+        if fa > 0:
             return ca.name
-        return cb.name if not cb.fixed else (ca.name if not ca.fixed else "")
+        # Both fully pinned on the needed axes: move nothing; _pin's
+        # consistency check on either side decides redundant vs conflict.
+        if not cb.fixed:
+            return cb.name
+        if not ca.fixed:
+            return ca.name
+        raise ModelError(
+            "mate: both components are fixed; a mate between two fixed "
+            "components can never be satisfied unless it is redundant — "
+            "unfix one of them"
+        )
 
     def _pin(self, mate_name: str, comp: ComponentRec, axis: int, value: float) -> bool:
         """Pin one translation axis; returns True if this added a new pin."""
@@ -406,6 +434,71 @@ class AssemblyTracker:
             )  # type: ignore[arg-type]
         )
         return True
+
+    def mate_picks(self, a: ResolvedEntity, b: ResolvedEntity) -> tuple[Vec3, Vec3]:
+        """Pre-solve SelectByID2 pick points for a mate's two entities.
+
+        Captured BEFORE solving: on real SolidWorks the components still
+        sit at their pre-mate positions when the selections execute —
+        AddMate5 itself performs the move. When both faces are already
+        coplanar (a component inserted exactly at its mated position),
+        coordinate picks cannot tell the two faces apart, so each pick is
+        re-chosen to a point where only its own face exists (outside the
+        other component's footprint, or inside one of its hole openings).
+        """
+        pick_a, pick_b = a.pick, b.pick
+        if (
+            isinstance(a, ResolvedFace)
+            and isinstance(b, ResolvedFace)
+            and a.axis == b.axis
+            and abs(a.position - b.position) <= 1e-3
+        ):
+            ra = self._coplanar_pick(a, b)
+            rb = self._coplanar_pick(b, a)
+            pick_a = ra or pick_a
+            pick_b = rb or pick_b
+            if ra is None or rb is None:
+                self._warn(
+                    f"mate: faces of {a.component!r} and {b.component!r} are already "
+                    "coplanar with overlapping footprints; coordinate selection "
+                    "cannot fully distinguish them — insert the component with a "
+                    "small standoff and let the mate close the gap"
+                )
+        return pick_a, pick_b
+
+    def _coplanar_pick(self, face: ResolvedFace, other: ResolvedFace) -> Vec3 | None:
+        """A pick on ``face`` where ``other``'s component has no face."""
+        ocomp = self.component(other.component)
+        axis = face.axis
+        ca, cb = (i for i in range(3) if i != axis)
+        olo, ohi = ocomp.world_aabb()
+        p = face.pick
+
+        def off_other(pt: Vec3) -> bool:
+            return not (
+                olo[ca] - EPS <= pt[ca] <= ohi[ca] + EPS
+                and olo[cb] - EPS <= pt[cb] <= ohi[cb] + EPS
+            )
+
+        if off_other(p):
+            return p
+        # Try ring points inside the other component's through-hole openings
+        # on the shared plane, clear of this face's own blockers (a shank).
+        comp = self.component(face.component)
+        if ocomp.part is None or comp.part is None:
+            return None
+        for hole_center, hole_r in _world_through_holes(ocomp, axis, face.position):
+            inner = _coaxial_blocker_radius(comp, face, hole_center)
+            if inner >= hole_r - EPS:
+                continue  # no ring: own material fills the opening
+            r_pick = (inner + hole_r) / 2.0 if inner > 0 else hole_r / 2.0
+            candidate = list(hole_center)
+            candidate[axis] = face.position
+            candidate[ca] += r_pick
+            cand = (candidate[0], candidate[1], candidate[2])
+            if _on_face(comp, face, cand):
+                return cand
+        return None
 
     def mate(
         self,
@@ -634,14 +727,48 @@ def _face_blockers(
         (shape, family) for _name, shape in part._removed_footprints(family)
     ]
     for f in part.features:
-        if f.kind != "boss" or f.sketch is None or f.name == owner:
+        if f.sketch is None or f.sketch.frame.family != family or f.name == owner:
             continue
-        if f.sketch.frame.family != family:
+        if f.kind == "boss":
+            o = f.sketch.frame.offset
+            a, b = sorted((o, o + f.direction_sign * (f.depth_mm or 0.0)))
+            past_face = b > l_pos + EPS if l_sign > 0 else a < l_pos - EPS
+            if past_face:
+                out.extend((shape, family) for shape in f.sketch.entities)
+        elif f.kind == "cut" and not f.through_all:
+            # A blind pocket/counterbore OPENING on this face removes the
+            # face there (through-cuts are already covered globally).
+            span = part._cut_feature_span(f)
+            if span is None:
+                continue
+            opens_here = (
+                abs(span[1] - l_pos) <= EPS if l_sign > 0 else abs(span[0] - l_pos) <= EPS
+            )
+            if opens_here:
+                out.extend((shape, family) for shape in f.sketch.entities)
+    return out
+
+
+def _face_material(
+    part: ModelTracker, l_axis: int, l_sign: float, l_pos: float, owner: str | None
+) -> list[tuple[g.Shape, str]]:
+    """Footprints of bosses whose cap actually forms this face — a valid
+    pick must land on one of them (not in the void between disjoint
+    bosses)."""
+    from swpilot.model.planes import FAMILY_FOR_AXIS
+
+    family = FAMILY_FOR_AXIS[_AXIS_NAMES[l_axis]]  # type: ignore[index]
+    out: list[tuple[g.Shape, str]] = []
+    for f in part.features:
+        if f.kind != "boss" or f.sketch is None or f.sketch.frame.family != family:
+            continue
+        if owner is not None and f.name == owner:
+            out.extend((shape, family) for shape in f.sketch.entities)
             continue
         o = f.sketch.frame.offset
         a, b = sorted((o, o + f.direction_sign * (f.depth_mm or 0.0)))
-        past_face = b > l_pos + EPS if l_sign > 0 else a < l_pos - EPS
-        if past_face:
+        cap_here = abs(b - l_pos) <= EPS if l_sign > 0 else abs(a - l_pos) <= EPS
+        if cap_here:
             out.extend((shape, family) for shape in f.sketch.entities)
     return out
 
@@ -654,6 +781,110 @@ def _project_uv(part: ModelTracker, family: str, point: Vec3) -> tuple[float, fl
     from swpilot.model.planes import dot
 
     return dot(point, frame.u), dot(point, frame.v)
+
+
+def _world_through_holes(
+    comp: ComponentRec, axis: int, plane_pos: float
+) -> list[tuple[Vec3, float]]:
+    """World (center, radius) of the component's through-hole openings
+    whose removed span covers ``plane_pos`` along ``axis``."""
+    assert comp.part is not None
+    out: list[tuple[Vec3, float]] = []
+    for f in comp.part.features:
+        if f.kind != "cut" or not f.through_all or f.sketch is None:
+            continue
+        span = comp.part._cut_feature_span(f)
+        if span is None:
+            continue
+        frame = f.sketch.frame
+        world_normal = comp.transform.rotate(frame.normal)
+        if abs(world_normal[axis]) < 0.5:
+            continue
+        for shape in f.sketch.entities:
+            if not isinstance(shape, g.Circle):
+                continue
+            mid = (span[0] + span[1]) / 2.0 - frame.offset
+            center = comp.transform.apply(frame.to_world(shape.cx, shape.cy, mid))
+            ends = [
+                comp.transform.apply(
+                    frame.to_world(shape.cx, shape.cy, s_end - frame.offset)
+                )[axis]
+                for s_end in span
+            ]
+            if min(ends) - EPS <= plane_pos <= max(ends) + EPS:
+                out.append((center, shape.r))
+    return out
+
+
+def _coaxial_blocker_radius(
+    comp: ComponentRec, face: ResolvedFace, world_center: Vec3
+) -> float:
+    """Largest radius of this component's coaxial circles that BLOCK the
+    face at ``world_center`` — bosses extending past the face plane in
+    its outward direction (a shank in the middle of a bolt-head seat).
+    The face's own outline never counts."""
+    assert comp.part is not None
+    axis = face.axis
+    best = 0.0
+    ca, cb = (i for i in range(3) if i != axis)
+    for f in comp.part.features:
+        if f.sketch is None or f.kind != "boss":
+            continue
+        frame = f.sketch.frame
+        world_normal = comp.transform.rotate(frame.normal)
+        if abs(world_normal[axis]) < 0.5:
+            continue
+        ends = [
+            comp.transform.apply(frame.to_world(0.0, 0.0, n))[axis]
+            for n in (0.0, f.direction_sign * (f.depth_mm or 0.0))
+        ]
+        past_face = (
+            max(ends) > face.position + EPS
+            if face.normal_sign > 0
+            else min(ends) < face.position - EPS
+        )
+        if not past_face:
+            continue
+        for shape in f.sketch.entities:
+            if not isinstance(shape, g.Circle):
+                continue
+            c = comp.transform.apply(frame.to_world(shape.cx, shape.cy, 0.0))
+            if abs(c[ca] - world_center[ca]) <= EPS and abs(c[cb] - world_center[cb]) <= EPS:
+                best = max(best, shape.r)
+    return best
+
+
+def _on_face(comp: ComponentRec, face: ResolvedFace, world_pt: Vec3) -> bool:
+    """Does the face actually exist at this world point?
+
+    In-plane AABB containment AND not inside the component's own removed
+    material (its own through-holes) — identical stacked plates share
+    hole positions, so a candidate over the other part's hole may sit in
+    this part's hole void too.
+    """
+    lo, hi = comp.world_aabb()
+    for i in range(3):
+        if i == face.axis:
+            continue
+        if not (lo[i] - EPS <= world_pt[i] <= hi[i] + EPS):
+            return False
+    if comp.part is not None:
+        from swpilot.model.planes import FAMILY_FOR_AXIS
+
+        t = comp.transform.translation
+        local = comp.transform.rotate_back(
+            (world_pt[0] - t[0], world_pt[1] - t[1], world_pt[2] - t[2])
+        )
+        local_axis_dir = comp.transform.rotate_back(
+            tuple(1.0 if i == face.axis else 0.0 for i in range(3))  # type: ignore[arg-type]
+        )
+        l_axis = max(range(3), key=lambda i: abs(local_axis_dir[i]))
+        family = FAMILY_FOR_AXIS[_AXIS_NAMES[l_axis]]  # type: ignore[index]
+        pu, pv = _project_uv(comp.part, family, local)
+        for _name, shape in comp.part._removed_footprints(family):
+            if g.covers(shape, g.Circle(pu, pv, 0.2)):
+                return False
+    return True
 
 
 def _shift_entity(e: ResolvedEntity, axis: int, delta: float) -> None:

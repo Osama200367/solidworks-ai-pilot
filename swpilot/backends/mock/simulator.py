@@ -32,7 +32,13 @@ class MockBackend(Backend):
         translation: tuple[float, float, float],
         rotation_row_major: list[float] | None,
         fixed: bool,
+        external: bool,
     ) -> None:
+        if external:
+            self.call_log.extend(calls.open_external_part_calls(path))
+            self.call_log.extend(
+                calls.activate_document_calls(self._active_doc or "<asm>")
+            )
         self.call_log.extend(calls.insert_component_calls(path, name, translation))
         if rotation_row_major is not None:
             self.call_log.extend(

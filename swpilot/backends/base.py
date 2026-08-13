@@ -69,6 +69,7 @@ class Backend(ABC):
         translation: tuple[float, float, float],
         rotation_row_major: list[float] | None,
         fixed: bool,
+        external: bool,
     ) -> None: ...
 
     @abstractmethod

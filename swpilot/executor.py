@@ -133,7 +133,12 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
         comp = res.component
         assert comp.path is not None
         backend.insert_component(
-            comp.path, comp.name, comp.translation, comp.rotation_row_major, comp.fixed
+            comp.path,
+            comp.name,
+            comp.translation,
+            comp.rotation_row_major,
+            comp.fixed,
+            comp.external,
         )
         return
     if isinstance(c, Mate):

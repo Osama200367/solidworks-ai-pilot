@@ -89,8 +89,12 @@ Run `examples/bolted_cover.json` and verify, in order:
    assembly); `ActivateDoc2` addresses documents by their real window
    titles, which the backend captures at creation.
 2. **AddMate5** — the highest-risk call of the phase (15 parameters,
-   ByRef ErrorStatus trailing slot under late binding, align=CLOSEST).
-   The cover should sit flush on the base with the hole patterns aligned.
+   align=CLOSEST; the ByRef ErrorStatus slot is filled with a VT_BYREF
+   VARIANT at execution time, and tuple results from early-bound
+   dispatch are unwrapped). Components are inserted with a small
+   standoff and the mate selections use PRE-solve coordinates — AddMate5
+   itself performs the closing move; the cover should land flush on the
+   base with the hole patterns aligned.
 3. **Component renaming via `Name2`** — instance names in the tree must
    read base_1, cover_1, bolt_1..bolt_4.
 4. **Coordinate face picks inside components** — mate selections use world
@@ -98,8 +102,14 @@ Run `examples/bolted_cover.json` and verify, in order:
    the pick coordinates in the report's `resolved` entities against the
    model.
 5. **Component rotation** — none is needed in the acceptance file; test a
-   `rotate: [{"axis": "x", "degrees": 180}]` insert separately to verify
-   the `Transform2` / `IMathUtility.CreateTransform` path.
+   `rotate: [{"axis": "z", "degrees": 90}]` insert of a visibly
+   asymmetric part separately to verify the `Transform2` /
+   `IMathUtility.CreateTransform` path (a 180° rotation is symmetric and
+   cannot reveal a transposed matrix; ArrayData rows are the images of
+   the local axes).
+6. **External components** — inserting a `file:` component first issues
+   `OpenDoc6` (ByRef Errors/Warnings as VARIANTs) and re-activates the
+   assembly before `AddComponent5`.
 
 ## What runs where
 

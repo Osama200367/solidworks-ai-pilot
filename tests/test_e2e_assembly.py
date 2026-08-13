@@ -81,8 +81,10 @@ class TestBoltedCoverCallPlan:
         inserts = [c.args for c in backend.call_log if c.method == "AddComponent5"]
         assert len(inserts) == 6
         assert inserts[0][0] == "base.SLDPRT"
-        # cover inserted at (0, 0, 12) mm -> meters
-        assert inserts[1][5:] == (0.0, 0.0, pytest.approx(0.012))
+        # cover inserted with a 20mm standoff -> meters (the mate closes it)
+        assert inserts[1][5:] == (0.0, 0.0, pytest.approx(0.020))
+        # bolts inserted 2mm proud of the seat: z = 20 + 2 = 22mm
+        assert all(i[7] == pytest.approx(0.022) for i in inserts[2:])
         renames = [c.value for c in backend.call_log if c.method == "Name2"]
         assert renames == ["base_1", "cover_1", "bolt_1", "bolt_2", "bolt_3", "bolt_4"]
 
@@ -113,8 +115,10 @@ class TestBoltedCoverCallPlan:
             for c in backend.call_log
             if c.method == "SelectByID2" and c.args[1] == "FACE"
         ]
-        # first mate: cover -z face against base +z face, both at z = 12mm
-        assert face_selects[0][4] == pytest.approx(0.012)
+        # Picks are PRE-solve: the cover still sits at its standoff (bottom
+        # face z = 20mm) while the base top is at 12mm — AddMate5 itself
+        # closes the gap on Windows, so the selections must use these.
+        assert face_selects[0][4] == pytest.approx(0.020)
         assert face_selects[1][4] == pytest.approx(0.012)
 
     def test_mates_renamed(self) -> None:

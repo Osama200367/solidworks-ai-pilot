@@ -375,6 +375,14 @@ def expand_bolt_circle(cmd: BoltCircle, session: SessionTracker) -> list[Emitted
             f"{2 * hole_r} mm holes; a fastener needs clearance (e.g. Ø9 holes "
             "for M8 bolts)"
         )
+    head_circles = [e for e in head.sketch.entities if isinstance(e, g.Circle)]
+    head_r = max((c.r for c in head_circles), default=0.0)
+    if head_r <= hole_r + EPS:
+        raise MacroExpansionError(
+            f"bolt_circle: head diameter {2 * head_r} mm does not bear on the "
+            f"{2 * hole_r} mm holes — the bolt would fall through; use a larger "
+            "head or smaller holes"
+        )
 
     # Which way does the bolt point? Local "down" = head -> shank.
     n = shank.sketch.frame.normal
@@ -391,13 +399,18 @@ def expand_bolt_circle(cmd: BoltCircle, session: SessionTracker) -> list[Emitted
     steps = _rotation_steps_between(down_local, target_down)
     head_facing = _flip_facing(cmd.seat.facing)
 
+    # Insert with a small standoff along the seat normal: the seat mate then
+    # performs a real closing move, and the pre-solve pick points are never
+    # ambiguously coplanar.
+    standoff = 2.0  # mm
+    seat_sign = 1.0 if cmd.seat.facing[0] == "+" else -1.0
     out: list[Emitted] = []
     for i, c in enumerate(circles):
         world_center = holes_comp.transform.apply(
             feature.sketch.frame.to_world(c.cx, c.cy, 0.0)
         )
         at = list(world_center)
-        at[seat_face.axis] = seat_face.position
+        at[seat_face.axis] = seat_face.position + seat_sign * standoff
         name = f"{cmd.prefix}_{i + 1}"
         out.append(
             InsertComponent(
@@ -407,22 +420,24 @@ def expand_bolt_circle(cmd: BoltCircle, session: SessionTracker) -> list[Emitted
                 rotate=steps,
             )
         )
+        # Static side first ('a'), bolt second ('b'): the solver moves the
+        # freer component and documents "b moves to a".
         out.append(
             Mate(
                 type="concentric",
-                a=MateCylinder(component=name, of_feature=shank.name),
-                b=MateCylinder(
+                a=MateCylinder(
                     component=cmd.holes.component,
                     of_feature=cmd.holes.of_feature,
                     at=(c.cx, c.cy),
                 ),
+                b=MateCylinder(component=name, of_feature=shank.name),
             )
         )
         out.append(
             Mate(
                 type="coincident",
-                a=MateFace(component=name, facing=head_facing, of_feature=head.name),
-                b=cmd.seat,
+                a=cmd.seat,
+                b=MateFace(component=name, facing=head_facing, of_feature=head.name),
             )
         )
     return out

@@ -28,6 +28,15 @@ except ImportError as _exc:  # pragma: no cover - exercised only off-Windows
     ) from _exc
 
 
+# Methods whose trailing parameters are ByRef long out-params: the logged
+# CallSpec carries plain 0 placeholders; _execute swaps in VT_BYREF VARIANTs.
+_BYREF_TRAILING: dict[str, int] = {
+    "AddMate5": 1,  # ErrorStatus
+    "ActivateDoc2": 1,  # Errors
+    "OpenDoc6": 2,  # Errors, Warnings
+}
+
+
 class SolidWorksBackend(Backend):
     name = "solidworks"
 
@@ -51,6 +60,7 @@ class SolidWorksBackend(Backend):
         self._documents: dict[str, Any] = {}  # logical name -> model handle
         self._titles: dict[str, str] = {}  # logical name -> window title
         self._components: dict[str, Any] = {}  # instance name -> IComponent2
+        self._saved_paths: set[str] = set()  # normcase abs paths saved this run
 
     # -- CallSpec execution --------------------------------------------
 
@@ -105,7 +115,27 @@ class SolidWorksBackend(Backend):
                 setattr(obj, spec.method, value)
                 result = None
             else:
-                result = getattr(obj, spec.method)(*spec.args)
+                live_args = spec.args
+                byref_n = _BYREF_TRAILING.get(spec.method, 0)
+                byref_vars = []
+                if byref_n:
+                    # ByRef long out-params must be passed as VT_BYREF
+                    # VARIANTs under late binding; the logged spec keeps the
+                    # plain 0 placeholders (documented divergence, like
+                    # template paths).
+                    import pythoncom
+                    import win32com.client as w32
+
+                    byref_vars = [
+                        w32.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+                        for _ in range(byref_n)
+                    ]
+                    live_args = spec.args[:-byref_n] + tuple(byref_vars)
+                result = getattr(obj, spec.method)(*live_args)
+                if isinstance(result, tuple):
+                    # Early-bound dispatch returns out-params alongside the
+                    # result; the primary result is always first.
+                    result = result[0] if result else None
         except BackendError:
             raise
         except Exception as exc:
@@ -118,10 +148,14 @@ class SolidWorksBackend(Backend):
                 f"(returned {result!r}): {spec.note}"
             )
         if spec.check == "non_null" and result is None:
+            detail = ""
+            if spec.kind == "call" and _BYREF_TRAILING.get(spec.method):
+                values = [getattr(v, "value", None) for v in byref_vars]
+                detail = f" (out-param status: {values})"
             raise BackendError(
-                f"COM call {spec.target}.{spec.method} returned nothing: {spec.note}. "
-                "SolidWorks likely rejected the operation; check the part for "
-                "error markers."
+                f"COM call {spec.target}.{spec.method} returned nothing: {spec.note}."
+                f"{detail} SolidWorks likely rejected the operation; check the "
+                "part for error markers."
             )
         if spec.check == "status_zero" and result not in (0, None):
             raise BackendError(
@@ -177,10 +211,20 @@ class SolidWorksBackend(Backend):
         model = self._execute(calls.new_document(str(template)))
         self._register_document(name, model)
 
-    def activate_document(self, name: str, kind: str) -> None:
-        title = self._titles.get(name)
-        if title is None:
+    def _current_title(self, name: str) -> str:
+        """The document's live window title (SaveAs3 changes titles)."""
+        handle = self._documents.get(name)
+        if handle is None:
             raise BackendError(f"activate_document: unknown document {name!r}")
+        try:
+            title = str(handle.GetTitle())
+            self._titles[name] = title
+            return title
+        except Exception:
+            return self._titles.get(name, name)
+
+    def activate_document(self, name: str, kind: str) -> None:
+        title = self._current_title(name)
         (spec,) = calls.activate_document_calls(title)
         model = self._execute(spec)
         self._documents[name] = model
@@ -196,9 +240,21 @@ class SolidWorksBackend(Backend):
         translation: tuple[float, float, float],
         rotation_row_major: list[float] | None,
         fixed: bool,
+        external: bool,
     ) -> None:
         self._require_model("insert_component")
         abs_path = os.path.abspath(path)
+        if os.path.normcase(abs_path) not in self._saved_paths:
+            # External file: AddComponent5 needs the document open in the
+            # session. Load it, then re-activate the assembly (OpenDoc6
+            # makes the opened part active).
+            self._execute_all(calls.open_external_part_calls(abs_path))
+            assert self._active_doc is not None
+            (reactivate,) = calls.activate_document_calls(
+                self._current_title(self._active_doc)
+            )
+            self._model = self._execute(reactivate)
+            self._documents[self._active_doc] = self._model
         insert_spec, rename_spec = calls.insert_component_calls(abs_path, name, translation)
         component = self._execute(insert_spec)
         self._components[name] = component
@@ -226,6 +282,9 @@ class SolidWorksBackend(Backend):
         self._require_model("save_assembly")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_assembly_calls(abs_path))
+        self._saved_paths.add(os.path.normcase(abs_path))
+        if self._active_doc is not None:
+            self._current_title(self._active_doc)  # refresh: saving retitles
 
     # -- primitive operations ------------------------------------------
 
@@ -319,6 +378,9 @@ class SolidWorksBackend(Backend):
         self._require_model("save_part")
         abs_path = os.path.abspath(path)
         self._execute_all(calls.save_part_calls(abs_path))
+        self._saved_paths.add(os.path.normcase(abs_path))
+        if self._active_doc is not None:
+            self._current_title(self._active_doc)  # refresh: saving retitles
 
     # -- lifecycle / reporting -----------------------------------------
 
@@ -331,6 +393,9 @@ class SolidWorksBackend(Backend):
         # killing an app the user may have had open would be hostile.
         self._model = None
         self._last_feature = None
+        self._documents.clear()
+        self._titles.clear()
+        self._components.clear()
         self._app = None
 
     def state_summary(self) -> dict[str, object]:

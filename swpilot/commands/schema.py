@@ -144,7 +144,9 @@ class InsertComponent(_Cmd):
     save_part-ed first, since SolidWorks inserts components from files)
     or ``file`` (an existing .SLDPRT path; give ``envelope`` [width,
     height, thickness] so its faces can be resolved for mates —
-    declared, not verified). ``rotate`` lists 90-degree steps about
+    declared, not verified; the envelope is centered in x/y with z from
+    0 to thickness, matching a plate modeled on the front plane).
+    ``rotate`` lists 90-degree steps about
     world axes, applied in order. The first inserted component is fixed
     automatically (SolidWorks convention).
     """

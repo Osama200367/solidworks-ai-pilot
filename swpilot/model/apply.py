@@ -74,6 +74,7 @@ class ComponentInsert:
     translation: tuple[float, float, float]
     rotation_row_major: list[float] | None  # None = identity
     fixed: bool
+    external: bool = False  # from an existing file (needs OpenDoc6 preload)
 
 
 @dataclass
@@ -175,18 +176,23 @@ def apply_to_session(session: SessionTracker, cmd: PrimitiveT) -> ApplyResult:
             translation=cmd.at,
             rotation_row_major=rotation,
             fixed=rec.fixed,
+            external=cmd.file is not None,
         )
         result.feature_name = name
     elif isinstance(cmd, Mate):
         asm = session.active_assembly("mate")
         a = resolve_mate_entity(asm, cmd.a)
         b = resolve_mate_entity(asm, cmd.b)
+        # Picks must be captured BEFORE solving: SolidWorks components sit
+        # at their pre-mate positions when the selections execute (AddMate5
+        # itself performs the move); the solver mutates entity coordinates.
+        pick_a, pick_b = asm.mate_picks(a, b)
         mate_rec = asm.mate(cmd.type, a, b, cmd.value)
         result.mate = MateCall(
             name=mate_rec.name,
             mate_type=cmd.type,
-            pick_a=a.pick,
-            pick_b=b.pick,
+            pick_a=pick_a,
+            pick_b=pick_b,
             value=cmd.value,
         )
         result.entities = [a, b]

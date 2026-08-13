@@ -67,6 +67,9 @@ SW_MATE_TYPES: dict[str, int] = {
 SW_MATE_ALIGN_CLOSEST = 2
 # swconst.swAddComponentConfigOptions_e
 SW_ADD_COMPONENT_CURRENT_CONFIG = 0
+# swconst.swDocumentTypes_e / swOpenDocOptions_e
+SW_DOC_PART = 1
+SW_OPEN_DOC_SILENT = 1
 # Both-document selection entity mark for mates.
 SW_MARK_MATE_ENTITY = 1
 
@@ -245,6 +248,25 @@ def insert_component_calls(
     ]
 
 
+def open_external_part_calls(path: str) -> list[CallSpec]:
+    """Load an external part file into memory.
+
+    AddComponent5 requires the source document to be open in the session;
+    same-run parts already are, external files are not. The two trailing
+    0s fill the ByRef Errors/Warnings slots (replaced with VARIANTs at
+    execution time by the COM backend).
+    """
+    return [
+        CallSpec(
+            target="App",
+            method="OpenDoc6",
+            args=(path, SW_DOC_PART, SW_OPEN_DOC_SILENT, "", 0, 0),
+            check="non_null",
+            note="open external part in memory (AddComponent5 prerequisite)",
+        ),
+    ]
+
+
 def component_transform_calls(
     name: str, rotation_row_major: list[float], translation_mm: tuple[float, float, float]
 ) -> list[CallSpec]:
@@ -256,7 +278,11 @@ def component_transform_calls(
     same 16 numbers.
     """
     t = [v * MM_TO_M for v in translation_mm]
-    data16 = tuple(rotation_row_major + t + [1.0, 0.0, 0.0, 0.0])
+    # IMathTransform.ArrayData rows are the IMAGES of the local axes — the
+    # transpose of our row-major (world = R @ local) rotation matrix.
+    r = rotation_row_major
+    transposed = [r[0], r[3], r[6], r[1], r[4], r[7], r[2], r[5], r[8]]
+    data16 = tuple(transposed + t + [1.0, 0.0, 0.0, 0.0])
     return [
         CallSpec(
             target=f"Component:{name}",
@@ -363,9 +389,11 @@ def add_mate_calls(
                 SW_MATE_TYPES[mate_type],
                 SW_MATE_ALIGN_CLOSEST,
                 False,  # Flip
+                # Equal limit slots equal to the distance denote a plain
+                # (non-limit) distance mate, matching macro-recorder output.
                 (value_mm or 0.0) * MM_TO_M,  # Distance
-                0.0,
-                0.0,  # distance limits
+                (value_mm or 0.0) * MM_TO_M,  # DistanceAbsUpperLimit
+                (value_mm or 0.0) * MM_TO_M,  # DistanceAbsLowerLimit
                 0.0,
                 0.0,  # gear ratio
                 0.0,

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from swpilot.backends import calls
 from swpilot.backends.base import Backend, Vec3
+from swpilot.model.drawing import DimSpec, DrawingSetup, NoteSpec, SectionSpec, ViewSpec
 
 
 class MockBackend(Backend):
@@ -136,6 +137,67 @@ class MockBackend(Backend):
 
     def save_part(self, path: str) -> None:
         self.call_log.extend(calls.save_part_calls(path))
+
+    def create_drawing(self, setup: DrawingSetup) -> None:
+        # The title-block properties live on the model document; switch to
+        # it first if the drawing flow left another document active.
+        if self._active_doc != setup.model_doc:
+            self.call_log.extend(calls.activate_document_calls(setup.model_doc))
+            self._active_doc = setup.model_doc
+        self.call_log.extend(calls.custom_property_calls(setup.properties))
+        self.call_log.extend(calls.new_drawing_calls(setup.sheet))
+        self.call_log.extend(
+            calls.setup_sheet_calls(
+                setup.sheet,
+                setup.scale[0],
+                setup.scale[1],
+                setup.first_angle,
+                setup.paper_w,
+                setup.paper_h,
+            )
+        )
+        self.call_log.extend(
+            calls.note_calls(setup.units_note_text, setup.units_note_position)
+        )
+
+    def add_views(self, views: list[ViewSpec]) -> None:
+        for v in views:
+            if v.method == "model":
+                assert v.model_path is not None and v.orientation is not None
+                self.call_log.extend(
+                    calls.model_view_calls(
+                        v.model_path, v.orientation, v.position, v.name, v.scale
+                    )
+                )
+            else:
+                assert v.parent is not None
+                self.call_log.extend(
+                    calls.projected_view_calls(v.parent, v.position, v.name)
+                )
+
+    def add_section_view(self, spec: SectionSpec) -> None:
+        self.call_log.extend(
+            calls.section_view_calls(
+                spec.parent, spec.line, spec.label, spec.position, spec.name
+            )
+        )
+
+    def add_annotations(self, dims: list[DimSpec], notes: list[NoteSpec]) -> None:
+        for d in dims:
+            self.call_log.extend(
+                calls.dimension_calls(
+                    d.picks,
+                    d.placement,
+                    d.prefix,
+                    d.below,
+                    f"{d.kind} dimension '{d.name}' = {d.value:g} mm in view '{d.view}'",
+                )
+            )
+        for n in notes:
+            self.call_log.extend(calls.note_calls(n.text, n.position))
+
+    def save_drawing(self, path: str) -> None:
+        self.call_log.extend(calls.save_drawing_calls(path))
 
     def finalize(self) -> None:
         self.call_log.extend(calls.finalize_calls())

@@ -149,6 +149,9 @@ class AssemblyTracker:
         self.components: dict[str, ComponentRec] = {}
         self.mates: list[MateRec] = []
         self.saved_to: list[str] = []
+        # Component+mate count at the last save; drawings compare against
+        # it to warn when the saved file is stale.
+        self.saved_feature_marker: int | None = None
         self._warnings: list[str] = []
         self._mate_n = 0
         self._instance_counters: dict[str, int] = {}
@@ -663,6 +666,7 @@ class AssemblyTracker:
                 "against the swpilot working directory"
             )
         self.saved_to.append(path)
+        self.saved_feature_marker = len(self.components) + len(self.mates)
 
     def summary(self) -> dict[str, object]:
         return {

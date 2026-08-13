@@ -1,0 +1,36 @@
+{
+  "schema_version": "0.4",
+  "commands": [
+    { "op": "new_part", "name": "flange" },
+    { "op": "create_sketch", "plane": "front" },
+    { "op": "draw_circle", "diameter": 120 },
+    { "op": "extrude", "depth": 15 },
+    { "op": "create_plane", "name": "hub_plane", "offset_from": "front", "distance": 15 },
+    { "op": "create_sketch", "plane": "hub_plane" },
+    { "op": "draw_circle", "diameter": 60 },
+    { "op": "extrude", "depth": 25 },
+    { "op": "create_sketch", "plane": "front" },
+    { "op": "draw_circle", "diameter": 30 },
+    { "op": "cut_extrude", "through_all": true },
+    { "op": "create_sketch", "plane": "front" },
+    { "op": "draw_circle", "center": [45, 0], "diameter": 9 },
+    { "op": "cut_extrude", "through_all": true },
+    { "op": "circular_pattern", "features": ["Cut-Extrude2"], "axis": "z", "count": 6 },
+    { "op": "save_part", "path": "flange.SLDPRT" },
+    {
+      "op": "create_drawing",
+      "name": "flange_sheet",
+      "of": "flange",
+      "sheet": "A4",
+      "scale": [1, 2],
+      "title": "HOLLOW FLANGE",
+      "drawn_by": "SW-Pilot",
+      "date": "2026-08-13"
+    },
+    { "op": "standard_views", "views": ["front"] },
+    { "op": "section_view", "parent": "front", "orientation": "vertical" },
+    { "op": "isometric_view", "corner": "top_right" },
+    { "op": "smart_dimensions" },
+    { "op": "save_drawing", "path": "flange.SLDDRW" }
+  ]
+}

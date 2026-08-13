@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.4",
+  "commands": [
+    { "op": "create_plate", "width": 120, "height": 80, "thickness": 12 },
+    { "op": "fillet", "radius": 8, "edges": { "select": "vertical_corners" } },
+    { "op": "chamfer", "distance": 1, "edges": { "select": "top_loop", "of_feature": "Boss-Extrude1" } },
+    { "op": "hole", "type": "counterbore", "standard": "M6", "at": [[-45, -25], [45, -25], [-45, 25], [45, 25]] },
+    { "op": "create_sketch", "on": { "facing": "+z" } },
+    { "op": "draw_slot", "start": [-20, 0], "end": [20, 0], "width": 10 },
+    { "op": "cut_extrude", "through_all": true, "reverse": true },
+    { "op": "linear_pattern", "features": ["Cut-Extrude3"], "direction": "y", "spacing": 25, "count": 2 },
+    { "op": "hole", "at": [[0, -30]], "diameter": 5 },
+    { "op": "circular_pattern", "features": ["Cut-Extrude4"], "axis": "z", "count": 3 },
+    { "op": "save_part", "path": "bracket.SLDPRT" },
+    {
+      "op": "create_drawing",
+      "name": "bracket_sheet",
+      "of": "Part1",
+      "sheet": "A3",
+      "title": "MOUNTING BRACKET",
+      "drawn_by": "SW-Pilot",
+      "date": "2026-08-13"
+    },
+    { "op": "standard_views" },
+    { "op": "isometric_view", "corner": "top_right" },
+    { "op": "smart_dimensions" },
+    { "op": "save_drawing", "path": "bracket.SLDDRW" }
+  ]
+}

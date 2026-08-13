@@ -1,17 +1,31 @@
-"""Session twin: named documents (parts + assemblies) and active routing.
+"""Session twin: named documents (parts, assemblies, drawings) and routing.
 
 One command file drives many documents. Commands apply to the *active*
 document; creating a document activates it, `activate_document` switches
-explicitly. Part-scoped commands hitting an assembly (or assembly
-commands hitting a part) fail with a clear error naming both.
+explicitly. Commands hitting the wrong document kind fail with a clear
+error naming both.
 """
 
 from __future__ import annotations
 
 from swpilot.model.assembly import AssemblyTracker
+from swpilot.model.drawing import DrawingTracker
 from swpilot.model.tracker import ModelError, ModelTracker
 
-Document = ModelTracker | AssemblyTracker
+Document = ModelTracker | AssemblyTracker | DrawingTracker
+
+
+def _doc_kind(doc: Document) -> str:
+    if isinstance(doc, ModelTracker):
+        return "part"
+    if isinstance(doc, AssemblyTracker):
+        return "assembly"
+    return "drawing"
+
+
+def _a_kind(doc: Document) -> str:
+    kind = _doc_kind(doc)
+    return f"an {kind}" if kind == "assembly" else f"a {kind}"
 
 
 class SessionTracker:
@@ -21,6 +35,7 @@ class SessionTracker:
         self.active: str | None = None
         self._part_n = 0
         self._assembly_n = 0
+        self._drawing_n = 0
 
     # -- creation / activation -----------------------------------------
 
@@ -46,6 +61,55 @@ class SessionTracker:
         self._register(resolved, tracker)
         return resolved, tracker
 
+    def new_drawing(
+        self,
+        name: str | None,
+        of: str | None,
+        sheet: str,
+        scale: tuple[int, int] | None,
+        projection: str,
+        title: str | None,
+        drawn_by: str,
+        date: str,
+    ) -> tuple[str, DrawingTracker]:
+        if of is None:
+            if self.active is None:
+                raise ModelError(
+                    "create_drawing: no document is open; build and save a part or "
+                    "assembly first (or name one with 'of')"
+                )
+            of = self.active
+        model = self.documents.get(of)
+        if model is None:
+            raise ModelError(
+                f"create_drawing: unknown document {of!r}; existing: {sorted(self.documents)}"
+            )
+        if isinstance(model, DrawingTracker):
+            raise ModelError(f"create_drawing: document {of!r} is itself a drawing")
+        if not model.saved_to:
+            kind = _doc_kind(model)
+            save_op = "save_part" if kind == "part" else "save_assembly"
+            raise ModelError(
+                f"create_drawing: document {of!r} has not been saved; SolidWorks "
+                f"drawing views reference the model file — add {save_op} first"
+            )
+        self._drawing_n += 1
+        resolved = name or f"Drawing{self._drawing_n}"
+        tracker = DrawingTracker(
+            name=resolved,
+            model_doc=of,
+            model=model,
+            model_path=model.saved_to[-1],
+            sheet=sheet,
+            scale=scale,
+            projection=projection,
+            title=title,
+            drawn_by=drawn_by,
+            date=date,
+        )
+        self._register(resolved, tracker)
+        return resolved, tracker
+
     def activate(self, name: str) -> Document:
         if name not in self.documents:
             raise ModelError(
@@ -66,8 +130,8 @@ class SessionTracker:
         name, doc = self.active_doc(op)
         if not isinstance(doc, ModelTracker):
             raise ModelError(
-                f"{op}: the active document {name!r} is an assembly; part commands "
-                "need an active part (activate_document or new_part first)"
+                f"{op}: the active document {name!r} is {_a_kind(doc)}; part "
+                "commands need an active part (activate_document or new_part first)"
             )
         return doc
 
@@ -75,8 +139,19 @@ class SessionTracker:
         name, doc = self.active_doc(op)
         if not isinstance(doc, AssemblyTracker):
             raise ModelError(
-                f"{op}: the active document {name!r} is a part; assembly commands "
-                "need an active assembly (new_assembly or activate_document first)"
+                f"{op}: the active document {name!r} is {_a_kind(doc)}; assembly "
+                "commands need an active assembly (new_assembly or "
+                "activate_document first)"
+            )
+        return doc
+
+    def active_drawing(self, op: str) -> DrawingTracker:
+        name, doc = self.active_doc(op)
+        if not isinstance(doc, DrawingTracker):
+            raise ModelError(
+                f"{op}: the active document {name!r} is {_a_kind(doc)}; drawing "
+                "commands need an active drawing (create_drawing or "
+                "activate_document first)"
             )
         return doc
 
@@ -85,7 +160,7 @@ class SessionTracker:
         if doc is None:
             raise ModelError(f"{op}: unknown document {name!r}; existing: {sorted(self.documents)}")
         if not isinstance(doc, ModelTracker):
-            raise ModelError(f"{op}: document {name!r} is an assembly, not a part")
+            raise ModelError(f"{op}: document {name!r} is {_a_kind(doc)}, not a part")
         return doc
 
     def part_saved_path(self, name: str, op: str) -> str | None:

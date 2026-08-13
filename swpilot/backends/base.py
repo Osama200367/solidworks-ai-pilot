@@ -20,6 +20,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from swpilot.backends.calls import CallSpec
+from swpilot.model.drawing import DimSpec, DrawingSetup, NoteSpec, SectionSpec, ViewSpec
 
 Vec3 = tuple[float, float, float]
 
@@ -151,6 +152,29 @@ class Backend(ABC):
 
     @abstractmethod
     def save_part(self, path: str) -> None: ...
+
+    # -- drawing operations (v0.4) -------------------------------------
+
+    @abstractmethod
+    def create_drawing(self, setup: DrawingSetup) -> None:
+        """Set title-block properties on the model, then open the drawing.
+
+        Implementations must activate the model document first (the
+        properties target it), create the drawing document, configure the
+        sheet, and leave the drawing active.
+        """
+
+    @abstractmethod
+    def add_views(self, views: list[ViewSpec]) -> None: ...
+
+    @abstractmethod
+    def add_section_view(self, spec: SectionSpec) -> None: ...
+
+    @abstractmethod
+    def add_annotations(self, dims: list[DimSpec], notes: list[NoteSpec]) -> None: ...
+
+    @abstractmethod
+    def save_drawing(self, path: str) -> None: ...
 
     # -- lifecycle / reporting -----------------------------------------
 

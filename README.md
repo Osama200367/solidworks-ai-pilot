@@ -4,15 +4,15 @@ AI-powered automation layer for SolidWorks. A user describes a part in plain
 language, an LLM translates that into structured JSON commands, and SW-Pilot
 executes them in SolidWorks through its COM API.
 
-**Current scope (v0.3)**: the JSON-command half of that pipeline, through
-multi-part **assemblies** — one command file builds several parts, inserts
-them as components (translate + 90°-step rotations), mates them
-(coincident/concentric/distance/parallel) with an exact axis-aligned mate
-solver that detects over/under-constrained states, and saves `.SLDASM`.
-Everything except the final COM hop runs and is tested without SolidWorks —
-in CI, in the cloud, anywhere. See [ROADMAP.md](ROADMAP.md) for the phase
-plan; the LLM translation layer comes later and will simply emit the same
-JSON.
+**Current scope (v0.4)**: the JSON-command half of that pipeline, through
+**engineering drawings** — one command file builds parts and assemblies,
+then produces dimensioned 2D sheets (`.SLDDRW`): standard/projected views,
+isometric and section views, and *smart dimensioning* (the governing
+features a machinist needs, never an auto-dimension dump), with the title
+block filled from metadata. Everything except the final COM hop runs and
+is tested without SolidWorks — in CI, in the cloud, anywhere. See
+[ROADMAP.md](ROADMAP.md) for the phase plan; the LLM translation layer
+comes later and will simply emit the same JSON.
 
 ```
 natural language ──▶ [LLM layer, v0.2] ──▶ commands.json ──▶ swpilot run
@@ -71,6 +71,10 @@ swpilot/
 │   ├── planes.py            #   plane frames: sketch-space ↔ world-space
 │   ├── geometry.py          #   2D predicates (rect/circle/slot)
 │   ├── tracker.py           #   ModelTracker: state, validation, edge derivation
+│   ├── assembly.py          #   AssemblyTracker: components, mates, snap-solver
+│   ├── drawing.py           #   DrawingTracker: sheet layout, views, sheet-space picks
+│   ├── dimensioning.py      #   smart-dimension analyzer (governing features only)
+│   ├── session.py           #   named documents + active-document routing
 │   ├── apply.py             #   command → tracker dispatch (used twice, see below)
 │   └── presets.py           #   metric fastener hole presets (M3–M12)
 ├── backends/
@@ -180,6 +184,38 @@ bolt's spin about its own mated axis labeled as normal for fasteners.
 in-run-modeled M8 socket-head cap screws placed by `bolt_circle` through
 Ø9 clearance holes.
 
+### Drawings (v0.4)
+
+| op | fields | notes |
+|---|---|---|
+| `create_drawing` | `name?`, `of?` (default: active doc), `sheet` `A4`\|`A3`, `scale?` `[num,den]`, `projection` `third`\|`first`, `title?`, `drawn_by`, `date?` | the referenced document must be saved first; omitted scale auto-picks the largest standard scale that fits |
+| `standard_views` | `views` (default `[front, top, right]`, must include `front`) | front placed as a model view, top/right projected from it — SolidWorks applies the sheet's projection angle |
+| `isometric_view` | `corner` (default `top_right`), `scale?` | defaults to one scale-series step smaller than the sheet |
+| `section_view` | `parent` (default `front`), `orientation` `vertical`\|`horizontal` | full section through the model center, auto-labeled A-A, B-B, …; the hollow-turned-part view |
+| `smart_dimensions` | — | see below |
+| `save_drawing` | `path` (`.SLDDRW`) | |
+
+**Smart dimensioning** emits the governing set, not a dump: overall
+envelope (W/H/T for rectangular parts; outer Øs + length for
+silhouette-detected turned parts, with bore and lengths in the section
+view when one exists), hole callouts in `N×Ø` form (counterbore/
+countersink data on a second line) with position dimensions from the
+datum edges, linear-pattern pitch, a bolt-circle note for circular
+patterns, and a note block (fillets, chamfers, slots) under the front
+view. Anything the analyzer cannot place safely is skipped **with a
+warning** — never silently. The drawing twin validates view placement
+against the sheet's content area (scale/fit errors are actionable:
+"use a smaller scale or a larger sheet") and projects every dimension
+attachment into exact sheet coordinates for selection.
+
+Title-block fields (description/title, drawn-by, date) are set as custom
+properties on the model, which SolidWorks' standard sheet formats display
+via `$PRPSHEET` links; sheet scale and size are auto-linked by SolidWorks.
+A `DIMENSIONS IN MM` note is placed explicitly. Acceptance cases:
+`examples/bracket_drawing.json` (the v0.2 bracket on an A3 sheet) and
+`examples/flange_drawing.json` (hollow flange, A4, front + section A-A
+proving internal bore dimensioning + isometric).
+
 Expansion rejects holes that would cross an edge, overlap each other, or
 touch anything tangentially (SolidWorks refuses zero-thickness geometry) —
 and because expansion runs the twin, *every* geometric rule fails at
@@ -193,15 +229,17 @@ log with arguments (in meters, as SolidWorks receives them), and a final model
 state snapshot. On the mock backend that snapshot is the simulated feature
 tree; on the real backend it is read back from SolidWorks.
 
-## What v0.2 deliberately does not do
+## What v0.4 deliberately does not do
 
 Native Hole Wizard features (holes are composed cuts by design), sketch
-constraints/dimensions as commands, assemblies, drawings, multiple parts per
-run, non-English SolidWorks installs (planes are selected by their English
-names), cross-family cut containment validation (warning only),
-footprint-union computation (a cut spanning the seam of several merged
-same-plane bosses produces a warning, not a verdict), rotated-rectangle
-pattern instances in twin validation (warning only), and the LLM layer
-itself. The integration point for the LLM is
-frozen, though: it produces a `CommandFile` JSON document, and everything
-downstream already exists.
+constraints/dimensions as commands, width mates, non-English SolidWorks
+installs (planes are selected by their English names), cross-family cut
+containment validation (warning only), footprint-union computation
+(warning only), rotated-rectangle pattern instances in twin validation
+(warning only); on drawings: sections of views other than the front view,
+offset/stepped section lines, detail views, GD&T, per-slot dimensions
+(slots travel in the note block), dimension-text collision avoidance
+beyond band reservation, and assembly sheets beyond views + envelope
+dims (component features belong on their own part sheets). The LLM layer
+comes last; its integration point is frozen: it produces a `CommandFile`
+JSON document, and everything downstream already exists.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swpilot"
-version = "0.3.0"
+version = "0.4.0"
 description = "SW-Pilot: JSON-driven automation layer for SolidWorks with a CI-friendly mock backend"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -17,6 +17,7 @@ from swpilot.commands.schema import (
     Chamfer,
     CircularPattern,
     CreateAxis,
+    CreateDrawing,
     CreatePlane,
     CreateSketch,
     CutExtrude,
@@ -27,6 +28,7 @@ from swpilot.commands.schema import (
     Extrude,
     Fillet,
     InsertComponent,
+    IsometricView,
     LinearPattern,
     Mate,
     MateCylinder,
@@ -35,9 +37,22 @@ from swpilot.commands.schema import (
     NewAssembly,
     NewPart,
     SaveAssembly,
+    SaveDrawing,
     SavePart,
+    SectionView,
+    SmartDimensions,
+    StandardViews,
 )
 from swpilot.model.assembly import AssemblyTracker, ResolvedEntity
+from swpilot.model.drawing import (
+    SHEET_MARGIN,
+    DimSpec,
+    DrawingSetup,
+    DrawingTracker,
+    NoteSpec,
+    SectionSpec,
+    ViewSpec,
+)
 from swpilot.model.session import SessionTracker
 from swpilot.model.tracker import EdgeRec, ModelError
 from swpilot.model.transforms import RotationStep, Transform, build_transform
@@ -62,6 +77,12 @@ PrimitiveT = (
     | Mate
     | SavePart
     | SaveAssembly
+    | CreateDrawing
+    | StandardViews
+    | IsometricView
+    | SectionView
+    | SmartDimensions
+    | SaveDrawing
 )
 
 
@@ -101,6 +122,11 @@ class ApplyResult:
     component: ComponentInsert | None = None
     mate: MateCall | None = None
     entities: list[ResolvedEntity] = field(default_factory=list)
+    drawing: DrawingSetup | None = None
+    views: list[ViewSpec] = field(default_factory=list)
+    section: SectionSpec | None = None
+    dimensions: list[DimSpec] = field(default_factory=list)
+    notes: list[NoteSpec] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     def resolved_dict(self) -> dict[str, object] | None:
@@ -110,6 +136,12 @@ class ApplyResult:
             out["edges"] = [e.to_dict() for e in self.edges]
         if self.entities:
             out["entities"] = [e.to_dict() for e in self.entities]
+        if self.views:
+            out["views"] = [v.name for v in self.views]
+        if self.section is not None:
+            out["views"] = [self.section.name]
+        if self.dimensions:
+            out["dimensions"] = [dim.to_dict() for dim in self.dimensions]
         return out or None
 
 
@@ -144,7 +176,12 @@ def apply_to_session(session: SessionTracker, cmd: PrimitiveT) -> ApplyResult:
     elif isinstance(cmd, ActivateDocument):
         doc = session.activate(cmd.name)
         result.document = cmd.name
-        result.doc_kind = "assembly" if isinstance(doc, AssemblyTracker) else "part"
+        if isinstance(doc, AssemblyTracker):
+            result.doc_kind = "assembly"
+        elif isinstance(doc, DrawingTracker):
+            result.doc_kind = "drawing"
+        else:
+            result.doc_kind = "part"
     elif isinstance(cmd, InsertComponent):
         asm = session.active_assembly("insert_component")
         if cmd.part is not None:
@@ -200,6 +237,47 @@ def apply_to_session(session: SessionTracker, cmd: PrimitiveT) -> ApplyResult:
     elif isinstance(cmd, SaveAssembly):
         asm = session.active_assembly("save_assembly")
         asm.save_assembly(cmd.path)
+    elif isinstance(cmd, CreateDrawing):
+        name, drawing = session.new_drawing(
+            cmd.name,
+            cmd.of,
+            cmd.sheet,
+            cmd.scale,
+            cmd.projection,
+            cmd.title,
+            cmd.drawn_by,
+            cmd.date,
+        )
+        result.document = name
+        result.doc_kind = "drawing"
+        result.drawing = DrawingSetup(
+            name=name,
+            model_doc=drawing.model_doc,
+            model_path=drawing.model_path,
+            sheet=drawing.sheet,
+            paper_w=drawing.sheet_w,
+            paper_h=drawing.sheet_h,
+            scale=drawing.scale_ratio,
+            first_angle=drawing.projection == "first",
+            properties=list(drawing.properties),
+            units_note_text="DIMENSIONS IN MM",
+            units_note_position=(SHEET_MARGIN, SHEET_MARGIN + 2.0),
+        )
+    elif isinstance(cmd, StandardViews):
+        drawing = session.active_drawing("standard_views")
+        result.views = drawing.standard_views(list(cmd.views))
+    elif isinstance(cmd, IsometricView):
+        drawing = session.active_drawing("isometric_view")
+        result.views = [drawing.isometric_view(cmd.corner, cmd.scale)]
+    elif isinstance(cmd, SectionView):
+        drawing = session.active_drawing("section_view")
+        result.section = drawing.section_view(cmd.parent, cmd.orientation)
+        result.feature_name = result.section.name
+    elif isinstance(cmd, SmartDimensions):
+        drawing = session.active_drawing("smart_dimensions")
+        result.dimensions, result.notes = drawing.smart_dimensions()
+    elif isinstance(cmd, SaveDrawing):
+        session.active_drawing("save_drawing").save_drawing(cmd.path)
     elif isinstance(cmd, CreatePlane):
         tracker = session.active_part("create_plane")
         tracker.create_plane(cmd.name, cmd.offset_from, cmd.distance)
@@ -269,6 +347,11 @@ def apply_to_session(session: SessionTracker, cmd: PrimitiveT) -> ApplyResult:
     if result.document is None and session.active is not None:
         result.document = session.active
         doc = session.documents[session.active]
-        result.doc_kind = "assembly" if isinstance(doc, AssemblyTracker) else "part"
+        if isinstance(doc, AssemblyTracker):
+            result.doc_kind = "assembly"
+        elif isinstance(doc, DrawingTracker):
+            result.doc_kind = "drawing"
+        else:
+            result.doc_kind = "part"
     result.warnings = session.pop_warnings()
     return result

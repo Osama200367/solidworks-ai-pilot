@@ -1,4 +1,4 @@
-"""Pydantic models for the SW-Pilot command schema (v0.2, accepts v0.1).
+"""Pydantic models for the SW-Pilot command schema (v0.4, accepts v0.1-v0.3).
 
 Two tiers share one discriminated union keyed on ``op``:
 
@@ -17,7 +17,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_valida
 
 from swpilot.model.presets import FASTENER_PRESETS, preset_names
 
-SCHEMA_VERSION = "0.3"
+SCHEMA_VERSION = "0.4"
 
 
 def _reject_bool(v: object) -> object:
@@ -409,6 +409,110 @@ class SavePart(_Cmd):
 
 
 # --------------------------------------------------------------------------
+# Drawings (v0.4)
+# --------------------------------------------------------------------------
+
+PositiveInt = Annotated[int, BeforeValidator(_reject_bool), Field(ge=1)]
+ScaleRatio = tuple[PositiveInt, PositiveInt]
+ViewName = Literal["front", "top", "right"]
+
+
+class CreateDrawing(_Cmd):
+    """Create a drawing document of a saved part or assembly.
+
+    ``of`` names a session document (default: the active one); it must
+    have been saved first — SolidWorks drawing views reference the model
+    by file path. ``scale`` (e.g. ``[1, 2]``) is the sheet scale; omit it
+    to auto-pick the largest standard scale whose full standard-view
+    layout fits the sheet. ``projection`` picks third-angle (SolidWorks
+    default) or first-angle (ISO) placement. ``title``/``drawn_by``/
+    ``date`` fill the title block via custom properties on the model.
+    """
+
+    op: Literal["create_drawing"] = "create_drawing"
+    name: str | None = None
+    of: str | None = None
+    sheet: Literal["A4", "A3"] = "A3"
+    scale: ScaleRatio | None = None
+    projection: Literal["third", "first"] = "third"
+    title: str | None = None
+    drawn_by: str = "SW-Pilot"
+    date: str = ""
+
+
+class StandardViews(_Cmd):
+    """Place the standard orthographic views on the active drawing.
+
+    The front view anchors the layout; top and right are projected from
+    it (SolidWorks applies the sheet's projection angle itself), so
+    ``views`` must include "front".
+    """
+
+    op: Literal["standard_views"] = "standard_views"
+    views: list[ViewName] = Field(default=["front", "top", "right"], min_length=1)
+
+    @model_validator(mode="after")
+    def _check_views(self) -> StandardViews:
+        if "front" in self.views and len(set(self.views)) == len(self.views):
+            return self
+        if "front" not in self.views:
+            raise ValueError(
+                "standard_views: 'front' is required (it anchors the projected views)"
+            )
+        raise ValueError("standard_views: duplicate view names")
+
+
+class IsometricView(_Cmd):
+    """Place an isometric view in a sheet corner.
+
+    ``scale`` defaults to one standard-series step smaller than the
+    sheet scale.
+    """
+
+    op: Literal["isometric_view"] = "isometric_view"
+    corner: Literal["top_right", "top_left", "bottom_right", "bottom_left"] = "top_right"
+    scale: ScaleRatio | None = None
+
+
+class SectionView(_Cmd):
+    """Full section through the model center of an existing view.
+
+    The cutting line runs vertically or horizontally through the parent
+    view's center and the section is labeled A-A, B-B, ... in creation
+    order — the essential view for hollow turned parts.
+    """
+
+    op: Literal["section_view"] = "section_view"
+    parent: ViewName = "front"
+    orientation: Literal["vertical", "horizontal"] = "vertical"
+
+
+class SmartDimensions(_Cmd):
+    """Dimension the governing features of the drawn model.
+
+    Not an auto-dimension dump: emits the overall envelope, hole
+    callouts in N x diameter form with datum position dimensions,
+    pattern pitch, and fillet/chamfer notes — each attached to the view
+    that shows it true-shape (missing views are skipped with warnings).
+    """
+
+    op: Literal["smart_dimensions"] = "smart_dimensions"
+
+
+class SaveDrawing(_Cmd):
+    """Save the active drawing. ``path`` must end in .slddrw."""
+
+    op: Literal["save_drawing"] = "save_drawing"
+    path: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_extension(self) -> SaveDrawing:
+        if not self.path.lower().endswith(".slddrw"):
+            raise ValueError("save_drawing: path must end with .SLDDRW")
+        return self
+
+
+# --------------------------------------------------------------------------
 # Macros
 # --------------------------------------------------------------------------
 
@@ -574,7 +678,13 @@ PrimitiveCommand = Annotated[
     | InsertComponent
     | Mate
     | SavePart
-    | SaveAssembly,
+    | SaveAssembly
+    | CreateDrawing
+    | StandardViews
+    | IsometricView
+    | SectionView
+    | SmartDimensions
+    | SaveDrawing,
     Field(discriminator="op"),
 ]
 
@@ -602,6 +712,12 @@ Command = Annotated[
     | Mate
     | SavePart
     | SaveAssembly
+    | CreateDrawing
+    | StandardViews
+    | IsometricView
+    | SectionView
+    | SmartDimensions
+    | SaveDrawing
     | CreatePlate
     | AddCornerHoles
     | Hole
@@ -630,6 +746,12 @@ PRIMITIVE_OPS = frozenset(
         "mate",
         "save_part",
         "save_assembly",
+        "create_drawing",
+        "standard_views",
+        "isometric_view",
+        "section_view",
+        "smart_dimensions",
+        "save_drawing",
     }
 )
 MACRO_OPS = frozenset({"create_plate", "add_corner_holes", "hole", "bolt_circle"})
@@ -640,5 +762,5 @@ class CommandFile(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["0.1", "0.2", "0.3"]
+    schema_version: Literal["0.1", "0.2", "0.3", "0.4"]
     commands: list[Command] = Field(min_length=1)

@@ -73,6 +73,26 @@ SW_OPEN_DOC_SILENT = 1
 # Both-document selection entity mark for mates.
 SW_MARK_MATE_ENTITY = 1
 
+# -- drawings (v0.4) -------------------------------------------------------
+# swconst.swUserPreferenceStringValue_e
+SW_DEFAULT_TEMPLATE_DRAWING = 10
+# swconst.swDwgPaperSizes_e — landscape metric sheets. The US sizes occupy
+# 0-5 (A..E with AsizeVertical at 1), then A4 landscape=6, A4 portrait=7,
+# A3=8, A2=9, A1=10, A0=11, user-defined=12.
+SW_PAPER_SIZES: dict[str, int] = {"A4": 6, "A3": 8}
+# swconst.swDwgTemplates_e mirrors the paper-size indexing for the standard
+# sizes (used as ISheet::SetProperties' TemplateIn so the sheet keeps the
+# format matching its size).
+SW_SHEET_TEMPLATES: dict[str, int] = {"A4": 6, "A3": 8}
+# swconst.swDimensionTextParts_e
+SW_DIM_TEXT_PREFIX = 1
+SW_DIM_TEXT_CALLOUT_BELOW = 4
+# swconst.swCustomInfoType_e
+SW_CUSTOM_INFO_TEXT = 30
+# The default drawing template names its sheet "Sheet1"; used to return
+# focus to the sheet after view-activated sketching.
+SW_SHEET1 = "Sheet1"
+
 
 @dataclass(frozen=True)
 class CallSpec:
@@ -962,6 +982,368 @@ def save_part_calls(path: str) -> list[CallSpec]:
             args=(path, SW_SAVE_AS_CURRENT_VERSION, SW_SAVE_AS_OPTIONS_SILENT),
             check="status_zero",
             note="save part (silent); returns swFileSaveError_e status, 0 = success",
+        ),
+    ]
+
+
+# --------------------------------------------------------------------------
+# Drawing builders (v0.4)
+# --------------------------------------------------------------------------
+
+
+def get_default_drawing_template() -> CallSpec:
+    return CallSpec(
+        target="App",
+        method="GetUserPreferenceStringValue",
+        args=(SW_DEFAULT_TEMPLATE_DRAWING,),
+        note="resolve default drawing template path (swDefaultTemplateDrawing)",
+    )
+
+
+def new_drawing_document(template: str, sheet: str) -> CallSpec:
+    return CallSpec(
+        target="App",
+        method="NewDocument",
+        args=(template, SW_PAPER_SIZES[sheet], 0.0, 0.0),
+        check="non_null",
+        note=f"create new drawing document ({sheet} landscape) from template",
+    )
+
+
+def new_drawing_calls(sheet: str, template: str = "<default drawing template>") -> list[CallSpec]:
+    """The call plan for the document part of ``create_drawing``.
+
+    Template resolution mirrors new_part: the mock logs a placeholder,
+    the COM backend resolves the real path.
+    """
+    return [get_default_drawing_template(), new_drawing_document(template, sheet)]
+
+
+def setup_sheet_calls(
+    sheet: str, scale_num: int, scale_den: int, first_angle: bool, w_mm: float, h_mm: float
+) -> list[CallSpec]:
+    """Set paper size, scale, and projection angle on the current sheet.
+
+    ISheet::SetProperties(PaperSize, TemplateIn, Scale1, Scale2,
+    FirstAngle, Width, Height); width/height only matter for
+    user-defined paper but are passed for completeness.
+    """
+    return [
+        CallSpec(
+            target="Sheet",
+            method="SetProperties",
+            args=(
+                SW_PAPER_SIZES[sheet],
+                SW_SHEET_TEMPLATES[sheet],
+                float(scale_num),
+                float(scale_den),
+                first_angle,
+                w_mm * MM_TO_M,
+                h_mm * MM_TO_M,
+            ),
+            check="truthy",
+            note=f"sheet setup: {sheet}, scale {scale_num}:{scale_den}, "
+            f"{'first' if first_angle else 'third'}-angle projection",
+        ),
+    ]
+
+
+def custom_property_calls(properties: list[tuple[str, str]]) -> list[CallSpec]:
+    """Title-block custom properties, set on the *model* document.
+
+    Standard SolidWorks sheet formats display these via $PRPSHEET links.
+    AddCustomInfo3 returns False when the field already exists — harmless
+    for fresh in-session documents, hence check="none".
+    """
+    return [
+        CallSpec(
+            target="Model",
+            method="AddCustomInfo3",
+            args=("", name, SW_CUSTOM_INFO_TEXT, value),
+            note=f"custom property {name} = {value!r} (title block via $PRPSHEET)",
+        )
+        for name, value in properties
+    ]
+
+
+def model_view_calls(
+    model_path: str,
+    orientation: str,
+    position_mm: tuple[float, float],
+    name: str,
+    scale: float | None = None,
+) -> list[CallSpec]:
+    """A named model view (front/isometric) at a sheet position.
+
+    The model must be open in-session (guaranteed: the twin requires it
+    saved, and saving happens in the same run). Divergence note: the COM
+    backend passes the absolute model path, the mock logs it as written
+    (same rule as save_part).
+    """
+    x, y = position_mm
+    out = [
+        CallSpec(
+            target="Model",
+            method="CreateDrawViewFromModelView3",
+            args=(model_path, orientation, x * MM_TO_M, y * MM_TO_M, 0.0),
+            check="non_null",
+            remember=True,
+            note=f"place {orientation} view of {model_path} at ({x:.4g}, {y:.4g}) mm",
+        ),
+    ]
+    if scale is not None:
+        out.append(
+            CallSpec(
+                target="LastFeature",
+                method="ScaleDecimal",
+                kind="set",
+                value=scale,
+                note=f"override view scale to {scale:g}",
+            )
+        )
+    out.append(
+        CallSpec(
+            target="LastFeature",
+            method="SetName2",
+            args=(name,),
+            note=f"rename view to '{name}' (twin name parity)",
+        )
+    )
+    return out
+
+
+def projected_view_calls(
+    parent: str, position_mm: tuple[float, float], name: str
+) -> list[CallSpec]:
+    """A projected view unfolded from a parent view.
+
+    SolidWorks applies the sheet's projection angle itself, so the same
+    drop position yields the correct first- or third-angle image.
+    """
+    x, y = position_mm
+    return [
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="fresh selection for projected view",
+        ),
+        CallSpec(
+            target="Model.Extension",
+            method="SelectByID2",
+            args=(parent, "DRAWINGVIEW", 0.0, 0.0, 0.0, False, 0, None, 0),
+            check="truthy",
+            note=f"select parent view '{parent}'",
+        ),
+        CallSpec(
+            target="Model",
+            method="CreateUnfoldedViewAt3",
+            args=(x * MM_TO_M, y * MM_TO_M, 0.0, False),
+            check="non_null",
+            remember=True,
+            note=f"projected view from '{parent}' at ({x:.4g}, {y:.4g}) mm",
+        ),
+        CallSpec(
+            target="LastFeature",
+            method="SetName2",
+            args=(name,),
+            note=f"rename view to '{name}' (twin name parity)",
+        ),
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="clear selection after projected view",
+        ),
+    ]
+
+
+def section_view_calls(
+    parent: str,
+    line_mm: tuple[float, float, float, float],
+    label: str,
+    position_mm: tuple[float, float],
+    name: str,
+) -> list[CallSpec]:
+    """A full section: cutting-line sketch in the activated parent view,
+    then CreateSectionViewAt5.
+
+    The riskiest sequence of the phase: the line is sketched with the
+    parent view activated (coordinates in sheet space — a Windows-
+    verified assumption), stays selected, and the section call consumes
+    it. Focus returns to the sheet afterwards.
+    """
+    x1, y1, x2, y2 = line_mm
+    px, py = position_mm
+    return [
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="fresh selection for section view",
+        ),
+        CallSpec(
+            target="Model",
+            method="ActivateView",
+            args=(parent,),
+            check="truthy",
+            note=f"activate parent view '{parent}' for the cutting line",
+        ),
+        CallSpec(
+            target="Model.SketchManager",
+            method="CreateLine",
+            args=(x1 * MM_TO_M, y1 * MM_TO_M, 0.0, x2 * MM_TO_M, y2 * MM_TO_M, 0.0),
+            check="non_null",
+            note="cutting line through the model center (sheet coordinates)",
+        ),
+        # IDrawingDoc::CreateSectionViewAt5(x, y, z, SectionLabel,
+        #   Options, ExcludedComponents, SectionDepth) -> IView.
+        # Options 0 = default full section; the just-sketched line is the
+        # active selection.
+        CallSpec(
+            target="Model",
+            method="CreateSectionViewAt5",
+            args=(px * MM_TO_M, py * MM_TO_M, 0.0, label, 0, None, 0.0),
+            check="non_null",
+            remember=True,
+            note=f"section view {label}-{label} from '{parent}' at "
+            f"({px:.4g}, {py:.4g}) mm",
+        ),
+        CallSpec(
+            target="LastFeature",
+            method="SetName2",
+            args=(name,),
+            note=f"rename view to '{name}' (twin name parity)",
+        ),
+        CallSpec(
+            target="Model",
+            method="ActivateSheet",
+            args=(SW_SHEET1,),
+            note="return focus from the view to the sheet (default sheet name)",
+        ),
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="clear selection after section view",
+        ),
+    ]
+
+
+def dimension_calls(
+    picks_mm: list[tuple[float, float]],
+    placement_mm: tuple[float, float],
+    prefix: str | None,
+    below: str | None,
+    note: str,
+) -> list[CallSpec]:
+    """Select view geometry at sheet coordinates and add one dimension.
+
+    One pick on a circle yields a diameter dimension; two picks on
+    parallel edges (or an edge and a circle) yield a linear dimension —
+    SolidWorks infers the type from the selection and the placement
+    point. Text prefixes use SolidWorks tokens (<MOD-DIAM>, <HOLE-SPOT>,
+    <HOLE-DEPTH>, <HOLE-SINK>, <MOD-DEG>).
+    """
+    out = [
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="fresh selection for dimension",
+        )
+    ]
+    for i, (x, y) in enumerate(picks_mm):
+        out.append(
+            CallSpec(
+                target="Model.Extension",
+                method="SelectByID2",
+                args=("", "EDGE", x * MM_TO_M, y * MM_TO_M, 0.0, i > 0, 0, None, 0),
+                check="truthy",
+                note=f"select view edge at sheet ({x:.4g}, {y:.4g}) mm",
+            )
+        )
+    px, py = placement_mm
+    out.append(
+        CallSpec(
+            target="Model",
+            method="AddDimension2",
+            args=(px * MM_TO_M, py * MM_TO_M, 0.0),
+            check="non_null",
+            remember=True,
+            note=note,
+        )
+    )
+    if prefix:
+        out.append(
+            CallSpec(
+                target="LastFeature",
+                method="SetText",
+                args=(SW_DIM_TEXT_PREFIX, prefix),
+                note=f"dimension text prefix {prefix!r}",
+            )
+        )
+    if below:
+        out.append(
+            CallSpec(
+                target="LastFeature",
+                method="SetText",
+                args=(SW_DIM_TEXT_CALLOUT_BELOW, below),
+                note=f"dimension callout below {below!r}",
+            )
+        )
+    out.append(
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="clear selection after dimension",
+        )
+    )
+    return out
+
+
+def note_calls(text: str, position_mm: tuple[float, float]) -> list[CallSpec]:
+    """A free note at a sheet position (no leader).
+
+    Selection is cleared first because InsertNote attaches a leader to
+    any selected entity.
+    """
+    x, y = position_mm
+    return [
+        CallSpec(
+            target="Model",
+            method="ClearSelection2",
+            args=(True,),
+            note="clear selection so the note gets no leader",
+        ),
+        CallSpec(
+            target="Model",
+            method="InsertNote",
+            args=(text,),
+            check="non_null",
+            remember=True,
+            note=f"sheet note {text!r}",
+        ),
+        CallSpec(
+            target="LastFeatureAnnotation",
+            method="SetPosition2",
+            args=(x * MM_TO_M, y * MM_TO_M, 0.0),
+            check="truthy",
+            note=f"position note at ({x:.4g}, {y:.4g}) mm",
+        ),
+    ]
+
+
+def save_drawing_calls(path: str) -> list[CallSpec]:
+    """Save the drawing (same SaveAs3 semantics as save_part)."""
+    return [
+        CallSpec(
+            target="Model",
+            method="SaveAs3",
+            args=(path, SW_SAVE_AS_CURRENT_VERSION, SW_SAVE_AS_OPTIONS_SILENT),
+            check="status_zero",
+            note="save drawing (silent); returns swFileSaveError_e status, 0 = success",
         ),
     ]
 

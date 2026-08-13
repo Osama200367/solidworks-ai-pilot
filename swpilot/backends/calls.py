@@ -32,10 +32,10 @@ SW_SAVE_AS_CURRENT_VERSION = 0
 SW_SAVE_AS_OPTIONS_SILENT = 1
 # swconst.swRefPlaneReferenceConstraints_e
 SW_REF_PLANE_DISTANCE = 8
-# Flip option for offset reference planes. NOTE: this enum value is the
-# least-certain constant in this module — verify on the first Windows
-# smoke test that a negative-offset plane lands on the correct side.
-SW_REF_PLANE_OPTION_FLIP = 512
+# swRefPlaneReferenceConstraint_OptionFlip = 0x100 (256); 512 is
+# OptionOriginOnCurve. Offset planes on the negative side use 8|256 = 264,
+# matching macro-recorder output.
+SW_REF_PLANE_OPTION_FLIP = 256
 # IFeatureManager::FeatureFillet3 options: value produced by the SolidWorks
 # macro recorder for a plain constant-radius edge fillet.
 SW_FILLET_DEFAULT_OPTIONS = 195
@@ -159,12 +159,16 @@ def create_plane_calls(name: str, base_display: str, distance_mm: float) -> list
             check="truthy",
             note=f"select base plane '{base_display}' for offset reference plane",
         ),
+        # remember stays False: InsertRefPlane returns an IRefPlane, which
+        # has no Name property under dynamic dispatch. Leaving _last_feature
+        # unset makes the rename spec fall back to FeatureByPositionReverse(0),
+        # which returns the newest IFeature (Name settable) — the same
+        # mechanism used after InsertAxis2.
         CallSpec(
             target="Model.FeatureManager",
             method="InsertRefPlane",
             args=(options, abs(distance_mm) * MM_TO_M, 0, 0.0, 0, 0.0),
             check="non_null",
-            remember=True,
             note=f"offset reference plane {distance_mm} mm from {base_display}",
         ),
         rename_last_feature(name),
@@ -458,17 +462,24 @@ def fillet_calls(
 ) -> list[CallSpec]:
     return [
         *select_edges_calls(points_mm),
+        # IFeatureManager.FeatureFillet3(
+        #   Options, R1, R2, Rho, Ftyp, OverflowType, ConicRhoType,
+        #   Radii, Dist2Arr, RhoArr, SetBackDistances,
+        #   PointRadiusArray, PointDist2Array, PointRhoArray)
+        # 14 parameters: 7 scalars + 7 VARIANT arrays. None marshals as a
+        # null VARIANT for the unused arrays (the recorded macro's Nothing x7).
         CallSpec(
             target="Model.FeatureManager",
             method="FeatureFillet3",
             args=(
                 SW_FILLET_DEFAULT_OPTIONS,
-                radius_mm * MM_TO_M,
-                0.0,  # Rho (conic; unused)
-                0,  # setback distances count
-                0,  # PointRadiusArray (VARIANT; none)
-                0,  # SetBackDistanceArray (VARIANT; none)
-                0,  # PointArray (VARIANT; none)
+                radius_mm * MM_TO_M,  # R1
+                0.0,  # R2
+                0.0,  # Rho
+                0,  # Ftyp: swFeatureFilletConstantRadius
+                0,  # OverflowType: default
+                0,  # ConicRhoType
+                None, None, None, None, None, None, None,  # the 7 arrays
             ),
             check="non_null",
             remember=True,
@@ -558,9 +569,12 @@ def linear_pattern_calls(
         )
     out += _select_features_calls(feature_names)
     out.append(
-        # IFeatureManager.FeatureLinearPattern4(
+        # IFeatureManager.FeatureLinearPattern4 (SW 2015+) — 20 parameters:
         #   Num1, Spacing1, Num2, Spacing2, FlipDir1, FlipDir2,
-        #   DName1, DName2, GeometryPattern, VarySketch)
+        #   DName1, DName2, GeometryPattern, VarySketch,
+        #   UseSeedGeom1, UseSeedGeom2, SeedOnly1, SeedOnly2,
+        #   SpacingInstances1, SpacingInstances2 (True = define by
+        #   spacing+instances), FlipRef1, FlipRef2, RefOffset1, RefOffset2
         CallSpec(
             target="Model.FeatureManager",
             method="FeatureLinearPattern4",
@@ -573,8 +587,13 @@ def linear_pattern_calls(
                 flip2,
                 "NULL",
                 "NULL",
-                False,
-                False,
+                False,  # GeometryPattern
+                False,  # VarySketch
+                False, False,  # up-to-reference controls dir 1/2
+                False, False,
+                True, True,  # spacing+instances mode for both directions
+                False, False,
+                0.0, 0.0,
             ),
             check="non_null",
             remember=True,
@@ -608,18 +627,26 @@ def circular_pattern_calls(
             note=f"select '{axis_feature}' as pattern axis (mark 1)",
         ),
         *_select_features_calls(feature_names),
-        # IFeatureManager.FeatureCircularPattern4(
-        #   Number, Spacing, FlipDirection, DName, GeometryPattern, EqualSpacing)
+        # IFeatureManager.FeatureCircularPattern4 — 7 parameters:
+        #   Number, Spacing, FlipDirection, DName, GeometryPattern,
+        #   EqualSpacing, VarySketch.
+        # Spacing semantics depend on EqualSpacing: True -> Spacing is the
+        # TOTAL pattern angle; False -> Spacing is the PER-INSTANCE angle,
+        # so convert to keep the schema's total_angle meaning (matching
+        # what the ModelTracker twin validates).
         CallSpec(
             target="Model.FeatureManager",
             method="FeatureCircularPattern4",
             args=(
                 count,
-                math.radians(total_angle_deg),
+                math.radians(total_angle_deg)
+                if equal_spacing
+                else math.radians(total_angle_deg) / max(count - 1, 1),
                 False,
                 "NULL",
                 False,
                 equal_spacing,
+                False,  # VarySketch
             ),
             check="non_null",
             remember=True,

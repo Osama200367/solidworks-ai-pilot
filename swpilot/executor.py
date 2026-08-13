@@ -199,7 +199,10 @@ def execute(
             result.status = "error"
             result.error = f"{type(exc).__name__}: {exc}"
             failed = True
-        result.warnings.extend(backend.pop_warnings())
+        # Tracker warnings emitted before a mid-command error would
+        # otherwise strand in the tracker and leak onto the next command;
+        # on the success path apply_to_tracker already drained them.
+        result.warnings.extend(tracker.pop_warnings() + backend.pop_warnings())
         result.call_count = len(backend.call_log) - calls_before
         results.append(result)
 

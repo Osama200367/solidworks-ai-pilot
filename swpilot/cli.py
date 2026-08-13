@@ -127,10 +127,10 @@ def run(
     ] = None,
 ) -> None:
     """Execute a command file against the chosen backend."""
-    _, expanded = _load_or_exit(file)
+    cmd_file, expanded = _load_or_exit(file)
     be = _make_backend(backend, visible, template)
     try:
-        run_report = execute(expanded, be)
+        run_report = execute(expanded, be, schema_version=cmd_file.schema_version)
     finally:
         be.close()
 

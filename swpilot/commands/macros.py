@@ -150,13 +150,29 @@ def expand_add_corner_holes(cmd: AddCornerHoles, tracker: ModelTracker) -> list[
     return [
         CreateSketch(plane=boss.sketch.frame.name),
         *[DrawCircle(center=c, diameter=cmd.diameter) for c in corners],
-        CutExtrude(through_all=True),
+        # Cut in the boss's own extrusion direction — a reversed boss has
+        # its material on the -normal side of the sketch plane.
+        CutExtrude(through_all=True, reverse=boss.reverse),
     ]
 
 
 # --------------------------------------------------------------------------
 # hole
 # --------------------------------------------------------------------------
+
+
+def _nearest_interval(
+    intervals: list[tuple[float, float]], position: float
+) -> tuple[float, float]:
+    """The material interval closest to ``position`` (0 when inside one)."""
+
+    def dist(iv: tuple[float, float]) -> float:
+        lo, hi = iv
+        if lo - EPS <= position <= hi + EPS:
+            return 0.0
+        return min(abs(position - lo), abs(position - hi))
+
+    return min(intervals, key=dist)
 
 
 def _hole_target(cmd: Hole, tracker: ModelTracker) -> tuple[PlaneFamily, float, bool]:
@@ -173,20 +189,54 @@ def _hole_target(cmd: Hole, tracker: ModelTracker) -> tuple[PlaneFamily, float, 
         return frame.family, position, outward > 0
     if isinstance(cmd.on, str):
         frame = tracker.frame(cmd.on)
-        interval = tracker.material_interval(frame.family)
-        if interval is None:
+        intervals = tracker.material_intervals(frame.family)
+        if not intervals:
             raise MacroExpansionError(
                 f"hole: no material exists on plane family '{frame.family}' to drill into"
             )
-        center = (interval[0] + interval[1]) / 2.0
-        return frame.family, frame.offset, frame.offset >= center
+        # Aim at the NEAREST material, not the envelope midpoint — with
+        # disjoint bosses the envelope's center can lie in the gap and
+        # point the drill at the far boss.
+        lo, hi = _nearest_interval(intervals, frame.offset)
+        return frame.family, frame.offset, frame.offset >= (lo + hi) / 2.0
     family, position, outward = _resolve_face(tracker, cmd.on, "hole")
     return family, position, outward > 0
+
+
+def _available_depth(
+    tracker: ModelTracker, family: PlaneFamily, position: float, reverse: bool
+) -> float | None:
+    """Material available below (reverse) / above the hole entry surface."""
+    intervals = tracker.material_intervals(family)
+    if not intervals:
+        return None
+    lo, hi = _nearest_interval(intervals, position)
+    return position - lo if reverse else hi - position
+
+
+def _check_hole_depth(
+    kind: str, needed: float, available: float | None, position: float
+) -> None:
+    if available is None:
+        return
+    if available <= EPS:
+        raise MacroExpansionError(
+            f"hole: no material below the entry surface at {position} mm to drill into"
+        )
+    if needed >= available - EPS:
+        raise MacroExpansionError(
+            f"hole: the {kind} is {needed} mm deep but only {available} mm of "
+            "material exists below the entry surface; the stepped hole would "
+            "degenerate into a plain through-hole (SolidWorks then rejects the "
+            "follow-up cut). Reduce the depth, pick another face, or use a "
+            "thicker part."
+        )
 
 
 def expand_hole(cmd: Hole, tracker: ModelTracker) -> list[Emitted]:
     assert cmd.diameter is not None  # schema guarantees completeness
     family, position, reverse = _hole_target(cmd, tracker)
+    available = _available_depth(tracker, family, position, reverse)
     plane_name, out = _plane_for(tracker, family, position)
 
     def sketch_circles(diameter: float) -> list[Emitted]:
@@ -197,6 +247,7 @@ def expand_hole(cmd: Hole, tracker: ModelTracker) -> list[Emitted]:
 
     if cmd.type == "counterbore":
         assert cmd.cb_diameter is not None and cmd.cb_depth is not None
+        _check_hole_depth("counterbore", cmd.cb_depth, available, position)
         out += sketch_circles(cmd.cb_diameter)
         out.append(CutExtrude(depth=cmd.cb_depth, reverse=reverse))
     elif cmd.type == "countersink":
@@ -205,6 +256,7 @@ def expand_hole(cmd: Hole, tracker: ModelTracker) -> list[Emitted]:
         # Drafted blind cut: the cone starts at cs_diameter on the surface
         # and necks down to the hole diameter at depth t.
         t = (cmd.cs_diameter - cmd.diameter) / (2.0 * math.tan(math.radians(angle / 2.0)))
+        _check_hole_depth("countersink cone", t, available, position)
         out += sketch_circles(cmd.cs_diameter)
         out.append(CutExtrude(depth=t, reverse=reverse, draft_angle=angle / 2.0))
     out += sketch_circles(cmd.diameter)

@@ -132,7 +132,10 @@ class CreateSketch(_Cmd):
 
     @model_validator(mode="after")
     def _check_target(self) -> CreateSketch:
-        if self.on is not None and "plane" in self.model_fields_set:
+        # Only a non-default plane conflicts with 'on': model_dump() echoes
+        # the default plane alongside 'on', and that dump must re-validate
+        # (round-tripping matters for LLM repair loops and `expand` output).
+        if self.on is not None and "plane" in self.model_fields_set and self.plane != "front":
             raise ValueError("create_sketch: give either 'plane' or 'on', not both")
         return self
 
@@ -337,13 +340,20 @@ class Hole(_Cmd):
                 f"hole: unknown standard {data['standard']!r}; known: {preset_names()}"
             )
         merged = dict(data)
-        merged.setdefault("diameter", preset.clearance_diameter)
+
+        def fill(key: str, value: float) -> None:
+            # An explicit JSON null means "not given" (generated JSON often
+            # emits every key), so it must not defeat the preset.
+            if merged.get(key) is None:
+                merged[key] = value
+
+        fill("diameter", preset.clearance_diameter)
         if merged.get("type") == "counterbore":
-            merged.setdefault("cb_diameter", preset.cb_diameter)
-            merged.setdefault("cb_depth", preset.cb_depth)
+            fill("cb_diameter", preset.cb_diameter)
+            fill("cb_depth", preset.cb_depth)
         if merged.get("type") == "countersink":
-            merged.setdefault("cs_diameter", preset.cs_diameter)
-            merged.setdefault("cs_angle", preset.cs_angle)
+            fill("cs_diameter", preset.cs_diameter)
+            fill("cs_angle", preset.cs_angle)
         return merged
 
     @model_validator(mode="after")

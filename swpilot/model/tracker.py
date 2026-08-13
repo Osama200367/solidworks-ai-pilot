@@ -50,14 +50,24 @@ class ModelError(ValueError):
 
 @dataclass
 class EdgeRec:
-    """One selectable edge with its world-space pick point."""
+    """One selectable edge with its world-space pick point.
+
+    ``max_fillet`` is the per-edge hard bound for a fillet/chamfer applied
+    to this edge ALONE; when several edges are selected together the
+    tracker applies additional pair rules (opposing cap loops share the
+    lateral faces; corner fillets of one rectangle share its sides).
+    ``depth_span`` is the extrusion/cut span the edge belongs to (for the
+    opposing-loops pair rule); ``entity`` indexes the sketch contour.
+    """
 
     id: str
     feature: str
     group: str  # one of EDGE_GROUPS
     midpoint: Vec3  # mm, world space
     length_mm: float | None
-    max_fillet: float | None  # half the smallest adjacent dimension, if known
+    max_fillet: float | None
+    entity: int = 0
+    depth_span: float | None = None
     consumed_by: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -204,6 +214,23 @@ class ModelTracker:
         if lo is None or hi is None:
             return None
         return lo, hi
+
+    def material_intervals(self, family: PlaneFamily) -> list[tuple[float, float]]:
+        """Per-boss (min, max) extents along the family normal, unmerged.
+
+        Unlike :meth:`material_interval`, gaps between disjoint bosses are
+        visible here — direction heuristics must aim at real material, not
+        at the envelope's midpoint.
+        """
+        out: list[tuple[float, float]] = []
+        for f in self.features:
+            if f.kind != "boss" or f.sketch is None or f.sketch.frame.family != family:
+                continue
+            o = f.sketch.frame.offset
+            depth = f.depth_mm or 0.0
+            a, b = sorted((o, o + f.direction_sign * depth))
+            out.append((a, b))
+        return out
 
     def _boss_footprints(self, family: PlaneFamily) -> list[g.Shape]:
         out = [
@@ -371,7 +398,7 @@ class ModelTracker:
             raise ModelError(
                 f"cut_extrude: active sketch {sketch.name} is empty; draw something first"
             )
-        self._validate_cut(sketch)
+        self._validate_cut(sketch, through_all, depth, reverse)
         self.active_sketch = None
         feature = FeatureRec(
             name=self._next_name("cut"),
@@ -387,7 +414,9 @@ class ModelTracker:
         self.features.append(feature)
         return feature
 
-    def _validate_cut(self, sketch: SketchRec) -> None:
+    def _validate_cut(
+        self, sketch: SketchRec, through_all: bool, depth: float | None, reverse: bool
+    ) -> None:
         family = sketch.frame.family
         footprints = self._boss_footprints(family)
         if not footprints:
@@ -397,6 +426,7 @@ class ModelTracker:
                 "inside material (cross-family containment is not checked)"
             )
             return
+        self._validate_cut_span(sketch, through_all, depth, reverse)
         removed = self._removed_footprints(family)
         for shape in sketch.entities:
             for cut_name, prev in removed:
@@ -429,6 +459,42 @@ class ModelTracker:
                 "computed)"
             )
 
+    def _validate_cut_span(
+        self, sketch: SketchRec, through_all: bool, depth: float | None, reverse: bool
+    ) -> None:
+        """The cut's travel along the plane normal must intersect material.
+
+        Footprint containment alone would accept e.g. a through-all cut
+        sketched on the top face pointing UP, away from the plate — which
+        SolidWorks rejects and which must never be recorded as removed
+        material.
+        """
+        interval = self.material_interval(sketch.frame.family)
+        if interval is None:
+            return
+        lo, hi = interval
+        o = sketch.frame.offset
+        s = -1.0 if reverse else 1.0
+        if through_all:
+            span_lo, span_hi = (o, float("inf")) if s > 0 else (float("-inf"), o)
+        else:
+            span_lo, span_hi = sorted((o, o + s * (depth or 0.0)))
+        overlap = min(span_hi, hi) - max(span_lo, lo)
+        if overlap <= EPS:
+            direction = "+normal" if s > 0 else "-normal"
+            raise ModelError(
+                f"cut_extrude: the cut travels along {direction} from its sketch "
+                f"plane at {o} mm but the material spans [{lo}, {hi}] mm on this "
+                "plane family, so the cut cannot intersect any material; flip "
+                "'reverse' or move the sketch plane"
+            )
+        if not through_all and (span_lo < lo - EPS or span_hi > hi + EPS):
+            self._warn(
+                f"cut_extrude: the blind cut span [{span_lo}, {span_hi}] mm extends "
+                f"beyond the material [{lo}, {hi}] mm; SolidWorks will cut only "
+                "where material exists"
+            )
+
     # -- edge derivation ----------------------------------------------
 
     def _derive_boss_edges(self, f: FeatureRec) -> list[EdgeRec]:
@@ -450,6 +516,8 @@ class ModelTracker:
                             midpoint=frame.to_world(pu, pv, along),
                             length_mm=length,
                             max_fillet=max_f,
+                            entity=i,
+                            depth_span=depth,
                         )
                     )
 
@@ -474,29 +542,109 @@ class ModelTracker:
                         group="vertical_corners",
                         midpoint=frame.to_world(cu, cv, (near + far) / 2.0),
                         length_mm=depth,
-                        max_fillet=min(shape.width, shape.height) / 2.0,
+                        # Hard bound for ONE corner alone: the full smaller
+                        # side. Selecting several corners together triggers
+                        # the shared-side pair rule (each < side/2).
+                        max_fillet=min(shape.width, shape.height),
+                        entity=i,
+                        depth_span=depth,
                     )
                 )
         return edges
 
-    def _derive_cut_edges(self, f: FeatureRec) -> list[EdgeRec]:
+    def _cut_feature_span(self, f: FeatureRec) -> tuple[float, float] | None:
+        """Effective removed span of a cut along its family normal, mm.
+
+        Nominal travel clamped to the material extent (blind cuts deeper
+        than the part stop at its face; through-all cuts start at their
+        sketch plane and run one way).
+        """
         assert f.sketch is not None
         frame = f.sketch.frame
+        interval = self.material_interval(frame.family)
         o = frame.offset
         s = f.direction_sign
-        interval = self.material_interval(frame.family)
         if f.through_all:
             if interval is None:
-                return []
+                return None
             lo, hi = interval
+            if s > 0:
+                lo = max(lo, o)
+            else:
+                hi = min(hi, o)
         else:
             depth = f.depth_mm or 0.0
             lo, hi = sorted((o, o + s * depth))
+            if interval is not None:
+                lo = max(lo, interval[0])
+                hi = min(hi, interval[1])
+        if hi - lo <= EPS:
+            return None
+        return lo, hi
+
+    def _derive_cut_edges(self, f: FeatureRec) -> list[EdgeRec]:
+        assert f.sketch is not None
+        span = self._cut_feature_span(f)
+        if span is None:
+            return []
+        frame = f.sketch.frame
+        o = frame.offset
+        priors = [
+            p
+            for p in self.features
+            if p.kind == "cut" and p.sketch is not None and p.sketch.frame.family == frame.family
+        ]
         edges: list[EdgeRec] = []
-        depth_for_limit = abs(hi - lo)
-        for group, along_world in (("top_loop", hi), ("bottom_loop", lo)):
-            for i, shape in enumerate(f.sketch.entities):
-                for j, (pu, pv, length, _mf) in enumerate(_loop_picks(shape, depth_for_limit)):
+        for i, shape in enumerate(f.sketch.entities):
+            lo, hi = span
+            dropped: set[str] = set()
+            # A rim only exists where material actually meets this cut. If a
+            # prior cut already removed the surface at one of our boundaries
+            # (a counterbore above a through-hole), the real rim sits at
+            # that prior cut's floor — walk boundaries inward until stable.
+            for _ in range(len(priors) + 1):
+                changed = False
+                for p in priors:
+                    pspan = self._cut_feature_span(p)
+                    if pspan is None or p.sketch is None:
+                        continue
+                    plo, phi = pspan
+                    for pshape in p.sketch.entities:
+                        if g.covers(pshape, shape):
+                            if phi >= hi - EPS and plo <= hi + EPS and plo > lo + EPS:
+                                hi = plo
+                                changed = True
+                            if plo <= lo + EPS and phi >= lo - EPS and phi < hi - EPS:
+                                lo = phi
+                                changed = True
+                        elif not g.disjoint(pshape, shape):
+                            # Partial overlap: the rim would be a composite
+                            # curve this twin cannot place — drop it loudly
+                            # rather than emit a pick point in air.
+                            if phi >= hi - EPS and plo <= hi + EPS:
+                                dropped.add("top_loop")
+                            if plo <= lo + EPS and phi >= lo - EPS:
+                                dropped.add("bottom_loop")
+                if not changed:
+                    break
+            if hi - lo <= EPS:
+                self._warn(
+                    f"cut_extrude: no rim edges derived for {_describe(shape)} in "
+                    f"{f.name}: earlier cuts already removed the surfaces it would "
+                    "intersect"
+                )
+                continue
+            d_span = hi - lo
+            for group, along_world in (("top_loop", hi), ("bottom_loop", lo)):
+                if group in dropped:
+                    self._warn(
+                        f"cut_extrude: {group} rim of {_describe(shape)} in {f.name} "
+                        "partially overlaps an earlier cut; its edge is not "
+                        "selectable by name-based selectors (use near_point if "
+                        "needed)"
+                    )
+                    continue
+                for j, (pu, pv, length, _mf) in enumerate(_loop_picks(shape, d_span)):
                     edges.append(
                         EdgeRec(
                             id=f"{f.name}:{group}:{i}.{j}",
@@ -504,7 +652,11 @@ class ModelTracker:
                             group=group,
                             midpoint=frame.to_world(pu, pv, along_world - o),
                             length_mm=length,
-                            max_fillet=depth_for_limit / 2.0 if depth_for_limit > 0 else None,
+                            # Opening rims are not bounded by the hole radius
+                            # (a rim fillet rolls outward), only by the span.
+                            max_fillet=d_span,
+                            entity=i,
+                            depth_span=d_span,
                         )
                     )
         return edges
@@ -568,6 +720,53 @@ class ModelTracker:
             )
         return edges
 
+    def _check_edge_limits(
+        self, op: str, term: str, value: float, edges: list[EdgeRec]
+    ) -> None:
+        # Per-edge hard bound (the edge alone).
+        for e in edges:
+            if e.max_fillet is not None and value >= e.max_fillet - EPS:
+                raise ModelError(
+                    f"{op}: {term} {value} mm is too large for edge {e.id}: it must "
+                    f"be smaller than {e.max_fillet} mm (the smallest adjacent "
+                    "dimension), or the feature consumes an adjacent face"
+                )
+        # Pair rule 1: opposing cap loops of one contour share the lateral
+        # faces, so together each must stay under half the span.
+        loops: dict[tuple[str, int], set[str]] = {}
+        spans: dict[tuple[str, int], float] = {}
+        for e in edges:
+            if e.group in ("top_loop", "bottom_loop"):
+                k = (e.feature, e.entity)
+                loops.setdefault(k, set()).add(e.group)
+                if e.depth_span is not None:
+                    spans[k] = min(spans.get(k, e.depth_span), e.depth_span)
+        for k, groups in loops.items():
+            if {"top_loop", "bottom_loop"} <= groups and k in spans:
+                bound = spans[k] / 2.0
+                if value >= bound - EPS:
+                    raise ModelError(
+                        f"{op}: {term} {value} mm is too large with BOTH cap loops of "
+                        f"{k[0]} selected: opposing edges share the {spans[k]} mm "
+                        f"lateral faces, so each must be smaller than {bound} mm"
+                    )
+        # Pair rule 2: several corners of one rectangle share its sides.
+        corners: dict[tuple[str, int], list[EdgeRec]] = {}
+        for e in edges:
+            if e.group == "vertical_corners":
+                corners.setdefault((e.feature, e.entity), []).append(e)
+        for k, es in corners.items():
+            bounds = [e.max_fillet for e in es if e.max_fillet is not None]
+            if len(es) >= 2 and bounds:
+                bound = min(bounds) / 2.0
+                if value >= bound - EPS:
+                    raise ModelError(
+                        f"{op}: {term} {value} mm is too large for {len(es)} corner "
+                        f"edges of {k[0]} selected together: corner features on a "
+                        f"shared side compete for it, so each must be smaller than "
+                        f"{bound} mm"
+                    )
+
     def fillet(
         self,
         radius: float,
@@ -576,13 +775,7 @@ class ModelTracker:
         near_point: Vec3 | None,
     ) -> tuple[FeatureRec, list[EdgeRec]]:
         edges = self.resolve_edges("fillet", select, of_feature, near_point)
-        for e in edges:
-            if e.max_fillet is not None and radius >= e.max_fillet - EPS:
-                raise ModelError(
-                    f"fillet: radius {radius} mm is too large for edge {e.id}: it must "
-                    f"be smaller than {e.max_fillet} mm (half the smallest adjacent "
-                    "dimension), or the fillet consumes an adjacent face"
-                )
+        self._check_edge_limits("fillet", "radius", radius, edges)
         feature = FeatureRec(name=self._next_name("fillet"), kind="fillet")
         feature.detail["radius"] = radius
         feature.detail["edge_ids"] = [e.id for e in edges]
@@ -600,13 +793,7 @@ class ModelTracker:
         near_point: Vec3 | None,
     ) -> tuple[FeatureRec, list[EdgeRec]]:
         edges = self.resolve_edges("chamfer", select, of_feature, near_point)
-        for e in edges:
-            if e.max_fillet is not None and distance >= e.max_fillet - EPS:
-                raise ModelError(
-                    f"chamfer: distance {distance} mm is too large for edge {e.id}: it "
-                    f"must be smaller than {e.max_fillet} mm (half the smallest "
-                    "adjacent dimension)"
-                )
+        self._check_edge_limits("chamfer", "distance", distance, edges)
         feature = FeatureRec(name=self._next_name("chamfer"), kind="chamfer")
         feature.detail["distance"] = distance
         feature.detail["angle"] = angle
@@ -676,8 +863,14 @@ class ModelTracker:
                     continue
                 for shape in seed.sketch.entities:
                     moved = _translate(shape, du, dv)
-                    target = boss_fp if seed.kind == "boss" else cut_fp
-                    target.append((frame.family, moved))
+                    if seed.kind == "boss":
+                        boss_fp.append((frame.family, moved))
+                    elif seed.through_all:
+                        # Only through-all instances count as removed
+                        # material — a patterned blind pocket leaves stock
+                        # beneath, so later cuts there are legal (mirrors
+                        # the through_all filter in _removed_footprints).
+                        cut_fp.append((frame.family, moved))
                     if seed.kind == "cut" and not any(
                         g.contains(fp, moved) for fp in self._boss_footprints(frame.family)
                     ):
@@ -711,7 +904,14 @@ class ModelTracker:
         axis_vec = AXIS_VECTORS[axis]
         cut_fp: list[tuple[PlaneFamily, g.Shape]] = []
         boss_fp: list[tuple[PlaneFamily, g.Shape]] = []
-        step = math.radians(total_angle) / (count if equal_spacing else max(count - 1, 1))
+        # Instance-angle semantics mirror SolidWorks: equal spacing over a
+        # full 360 divides by count (no doubled instance at the seam); over
+        # a partial angle the last instance lands ON the boundary, so both
+        # equal and explicit spacing divide by count-1.
+        if equal_spacing and abs(total_angle - 360.0) <= EPS:
+            step = math.radians(total_angle) / count
+        else:
+            step = math.radians(total_angle) / max(count - 1, 1)
         for seed in seeds:
             assert seed.sketch is not None
             frame = seed.sketch.frame
@@ -733,8 +933,12 @@ class ModelTracker:
                             "containment-checked by the twin"
                         )
                         continue
-                    target = boss_fp if seed.kind == "boss" else cut_fp
-                    target.append((frame.family, rotated))
+                    if seed.kind == "boss":
+                        boss_fp.append((frame.family, rotated))
+                    elif seed.through_all:
+                        # See linear_pattern: blind-pocket instances leave
+                        # material beneath and must not count as removed.
+                        cut_fp.append((frame.family, rotated))
                     if seed.kind == "cut" and not any(
                         g.contains(fp, rotated)
                         for fp in self._boss_footprints(frame.family)
@@ -862,9 +1066,18 @@ LoopPick = tuple[float, float, float | None, float | None]
 
 
 def _loop_picks(shape: g.Shape, depth: float) -> list[LoopPick]:
-    """(u, v, edge_length, max_fillet) pick points for one cap loop."""
+    """(u, v, edge_length, max_fillet) pick points for one cap loop.
+
+    ``max_fillet`` is the bound for filleting ONE cap loop alone: in-plane
+    it is limited by opposing edges of the same loop competing for the cap
+    face (half the smaller side / the radius), along the extrusion by the
+    FULL span — halving the span only applies when both cap loops are
+    selected together, which the tracker's pair rule enforces.
+    """
     if isinstance(shape, g.Rect):
-        max_f = min(shape.width, shape.height, depth) / 2.0 if depth > 0 else None
+        max_f = (
+            min(shape.width / 2.0, shape.height / 2.0, depth) if depth > 0 else None
+        )
         return [
             (shape.cx, shape.ymin, shape.width, max_f),
             (shape.xmax, shape.cy, shape.height, max_f),
@@ -872,7 +1085,7 @@ def _loop_picks(shape: g.Shape, depth: float) -> list[LoopPick]:
             (shape.xmin, shape.cy, shape.height, max_f),
         ]
     if isinstance(shape, g.Circle):
-        max_f = depth / 2.0 if depth > 0 else None
+        max_f = min(shape.r, depth) if depth > 0 else shape.r
         import math
 
         return [(shape.cx + shape.r, shape.cy, math.pi * shape.diameter, max_f)]
@@ -882,7 +1095,7 @@ def _loop_picks(shape: g.Shape, depth: float) -> list[LoopPick]:
         return []
     dx = (shape.x2 - shape.x1) / length
     dy = (shape.y2 - shape.y1) / length
-    max_f = min(shape.width, depth) / 2.0 if depth > 0 else None
+    max_f = min(shape.width / 2.0, depth) if depth > 0 else shape.r
     return [(shape.x2 + dx * shape.r, shape.y2 + dy * shape.r, None, max_f)]
 
 

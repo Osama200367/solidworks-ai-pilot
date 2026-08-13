@@ -339,10 +339,16 @@ class TestFilletChamfer:
         with pytest.raises(ModelError, match="too large"):
             tr.fillet(25, "vertical_corners", None, None)  # half of 50 is the cap
 
+    def test_chamfer_on_single_loop_allows_up_to_full_depth(self, tr: ModelTracker) -> None:
+        # 5mm chamfer on the top edge of a 10mm plate is perfectly valid —
+        # only selecting BOTH loops halves the depth budget.
+        make_plate(tr, 100, 50, 10)
+        tr.chamfer(5, 45, "top_loop", None, None)
+
     def test_chamfer_distance_limit_on_top_loop(self, tr: ModelTracker) -> None:
         make_plate(tr, 100, 50, 10)
         with pytest.raises(ModelError, match="too large"):
-            tr.chamfer(5, 45, "top_loop", None, None)  # capped by thickness/2
+            tr.chamfer(12, 45, "top_loop", None, None)  # capped by depth (10)
 
 
 class TestPatterns:

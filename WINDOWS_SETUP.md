@@ -71,10 +71,9 @@ Useful flags: `--no-visible` runs SolidWorks without showing the window;
    land on the four plate corners. If it selects wrong edges, the sketch-axis
    conventions in `swpilot/model/planes.py` need adjusting (they are pinned
    by `tests/test_planes.py`).
-2. **Negative-offset reference planes** — `SW_REF_PLANE_OPTION_FLIP` in
-   `swpilot/backends/calls.py` is the least-certain constant in the
-   codebase; verify a `create_plane` with negative distance lands on the
-   correct side.
+2. **Negative-offset reference planes** — `create_plane` with a negative
+   distance uses `swRefPlaneReferenceConstraint_OptionFlip` (256); verify
+   the plane lands on the correct side of its base.
 3. **Feature renaming** — after a run, the feature tree names should match
    the run report exactly (`Boss-Extrude1`, `Cut-Extrude1`, `SWPilot_Plane1`,
    `SWPilot_Axis_Z`, ...).

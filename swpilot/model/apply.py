@@ -1,3 +1,11 @@
+# ============================================================
+# SW-Pilot — SolidWorks AI Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Author & Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """Apply primitive commands to a :class:`SessionTracker`.
 
 One dispatcher, two callers: macro expansion applies each emitted

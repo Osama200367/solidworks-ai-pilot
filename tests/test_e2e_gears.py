@@ -1,3 +1,11 @@
+# ============================================================
+# SW-Pilot — SolidWorks AI Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Author & Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """End-to-end acceptance for v0.5: gears, mesh check, revolved pulley.
 
 The mock call plan is byte-identical to what the COM backend executes

@@ -4,6 +4,18 @@ AI-powered automation layer for SolidWorks. A user describes a part in plain
 language, an LLM translates that into structured JSON commands, and SW-Pilot
 executes them in SolidWorks through its COM API.
 
+## Ownership & License
+
+**This project is proprietary software.**
+Copyright © 2026 **Eng. Osama Isa Ali Alassar** (المهندس أسامة عيسى علي العصار).
+**All Rights Reserved.**
+
+Eng. Osama Isa Ali Alassar is the sole author, designer, and owner of
+SW-Pilot and all of its components. This repository is shared **for review
+only** — access grants no license or right to use, copy, modify, or
+redistribute any part of it. See [LICENSE](LICENSE) and [NOTICE](NOTICE)
+for the full terms and the declaration of authorship.
+
 **Current scope (v1.1)**: the whole pipeline, now **voice-driven too**. You
 can *speak* a part/assembly description — Arabic or English — and it flows
 through the exact same path as typing it. A **natural-language layer**

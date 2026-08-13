@@ -1,3 +1,11 @@
+# ============================================================
+# SW-Pilot — SolidWorks AI Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Author & Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """End-to-end acceptance for v0.4: the bracket and flange drawing sheets.
 
 Asserts the exact mock call plan — which is byte-identical to what the

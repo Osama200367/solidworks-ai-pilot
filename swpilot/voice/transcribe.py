@@ -1,3 +1,11 @@
+# ============================================================
+# SW-Pilot — SolidWorks AI Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Author & Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """Speech-to-text: an optional Whisper-compatible client + a thin mic wrapper.
 
 Transcription mirrors v1.0's provider-agnostic philosophy. API mode POSTs the

@@ -1,3 +1,11 @@
+# ============================================================
+# SW-Pilot — SolidWorks AI Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Author & Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """Regression tests pinning fixes from the v0.5 adversarial review.
 
 12 findings confirmed (0 refuted); one (the involute flank SIGN error) was

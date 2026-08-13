@@ -264,7 +264,9 @@ class AssemblyTracker:
         l_axis = _AXIS_NAMES.index(local_facing[1])
         l_sign = 1.0 if local_facing[0] == "+" else -1.0
         l_pos = hi_l[l_axis] if l_sign > 0 else lo_l[l_axis]
-        pick_local = self._face_pick_local(comp, l_axis, l_sign, l_pos, lo_l, hi_l)
+        pick_local = self._face_pick_local(
+            comp, l_axis, l_sign, l_pos, lo_l, hi_l, owner=of_feature
+        )
         pick = comp.transform.apply(pick_local)
         return ResolvedFace(component, axis, sign, pick[axis], pick)
 
@@ -276,8 +278,15 @@ class AssemblyTracker:
         l_pos: float,
         lo: Vec3,
         hi: Vec3,
+        owner: str | None,
     ) -> Vec3:
-        """A local point on the face, dodging removed/covered regions."""
+        """A local point on the face, dodging regions where the face is not.
+
+        Two blocker kinds: material *removed* by through-cuts (holes), and
+        material *added* by other bosses whose extrusion touches this face
+        plane (a bolt shank growing out of the head's seat face — picking
+        there would grab an ambiguous or wrong face).
+        """
         assert comp.part is not None
         others = [i for i in range(3) if i != l_axis]
         cu = (lo[others[0]] + hi[others[0]]) / 2.0
@@ -294,16 +303,19 @@ class AssemblyTracker:
             p[others[1]] = v
             return (p[0], p[1], p[2])
 
-        blockers = _face_blockers(comp.part, l_axis)
+        blockers = _face_blockers(comp.part, l_axis, l_sign, l_pos, owner)
         for u, v in candidates:
-            if not any(g.covers(shape, g.Circle(pu, pv, 0.2)) for shape, (pu, pv) in (
-                (s, _project_uv(comp.part, s_frame_family, local_point(u, v)))
-                for s, s_frame_family in blockers
-            )):
+            if not any(
+                g.covers(shape, g.Circle(pu, pv, 0.2))
+                for shape, (pu, pv) in (
+                    (s, _project_uv(comp.part, s_frame_family, local_point(u, v)))
+                    for s, s_frame_family in blockers
+                )
+            ):
                 return local_point(u, v)
         self._warn(
-            "mate: face pick point may fall inside a hole; verify the selection on "
-            "the first Windows run"
+            "mate: face pick point may fall inside a hole or under an adjoining "
+            "boss; verify the selection on the first Windows run"
         )
         return local_point(*candidates[0])
 
@@ -604,12 +616,34 @@ def _part_aabb(comp: ComponentRec) -> tuple[Vec3, Vec3]:
     return comp.local_aabb()
 
 
-def _face_blockers(part: ModelTracker, l_axis: int):  # type: ignore[no-untyped-def]
-    """Removed footprints whose plane family's normal lies on l_axis."""
+def _face_blockers(
+    part: ModelTracker, l_axis: int, l_sign: float, l_pos: float, owner: str | None
+) -> list[tuple[g.Shape, str]]:
+    """Regions of the face plane where the face itself is absent.
+
+    Holes (through-cut footprints on the same plane family) plus the
+    footprints of boss features whose material extends PAST the face
+    plane in its outward direction — there the surface belongs to the
+    adjoining boss (a shank growing out of a bolt head's seat face), not
+    to this face. A boss whose cap IS the face never blocks it.
+    """
     from swpilot.model.planes import FAMILY_FOR_AXIS
 
     family = FAMILY_FOR_AXIS[_AXIS_NAMES[l_axis]]  # type: ignore[index]
-    return [(shape, family) for _name, shape in part._removed_footprints(family)]
+    out: list[tuple[g.Shape, str]] = [
+        (shape, family) for _name, shape in part._removed_footprints(family)
+    ]
+    for f in part.features:
+        if f.kind != "boss" or f.sketch is None or f.name == owner:
+            continue
+        if f.sketch.frame.family != family:
+            continue
+        o = f.sketch.frame.offset
+        a, b = sorted((o, o + f.direction_sign * (f.depth_mm or 0.0)))
+        past_face = b > l_pos + EPS if l_sign > 0 else a < l_pos - EPS
+        if past_face:
+            out.extend((shape, family) for shape in f.sketch.entities)
+    return out
 
 
 def _project_uv(part: ModelTracker, family: str, point: Vec3) -> tuple[float, float]:

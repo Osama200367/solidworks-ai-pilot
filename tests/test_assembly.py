@@ -111,6 +111,23 @@ class TestResolveFace:
         px, py, _ = face.pick
         assert (px**2 + py**2) ** 0.5 > 10.0  # outside the hole
 
+    def test_bolt_head_seat_pick_dodges_shank(self) -> None:
+        bolt = ModelTracker()
+        bolt.new_part()
+        bolt.create_sketch("front")
+        bolt.draw_circle((0, 0), 13)  # head [0, 8]
+        bolt.extrude(8, False)
+        bolt.create_sketch("front")
+        bolt.draw_circle((0, 0), 8)  # shank [-20, 0] grows from the seat face
+        bolt.extrude(20, True)
+        bolt.save_part("b.SLDPRT")
+        asm = asm_with(("bolt_1", bolt, (0, 0, 0)))
+        face = asm.resolve_face("bolt_1", "-z", "Boss-Extrude1")
+        px, py, pz = face.pick
+        assert pz == pytest.approx(0.0)
+        r = (px**2 + py**2) ** 0.5
+        assert 4.0 < r < 6.5  # on the annulus: outside the shank, inside the head
+
     def test_envelope_face_warns_declared(self) -> None:
         asm = AssemblyTracker("a")
         asm.insert_component(

@@ -418,6 +418,46 @@ class SolidWorksBackend(Backend):
         if self._active_doc is not None:
             self._current_title(self._active_doc)  # refresh: saving retitles
 
+    # -- curve operations (v0.5) ---------------------------------------
+
+    def draw_spline(self, points: list[tuple[float, float]]) -> None:
+        self._require_model("draw_spline")
+        self._execute_all(calls.draw_spline_calls(points))
+
+    def draw_arc(
+        self,
+        center: tuple[float, float],
+        start: tuple[float, float],
+        end: tuple[float, float],
+        ccw: bool,
+    ) -> None:
+        self._require_model("draw_arc")
+        self._execute_all(calls.draw_arc_calls(center, start, end, ccw))
+
+    def draw_line(
+        self, start: tuple[float, float], end: tuple[float, float]
+    ) -> None:
+        self._require_model("draw_line")
+        self._execute_all(calls.draw_line_calls(start, end))
+
+    def revolve(self, axis_feature: str, angle: float, reverse: bool, name: str) -> None:
+        self._require_model("revolve")
+        self._execute_all(calls.revolve_calls(axis_feature, angle, reverse, name))
+
+    def helix_thread(
+        self,
+        diameter: float,
+        pitch: float,
+        length: float,
+        right_handed: bool,
+        revolutions: float,
+        name: str,
+    ) -> None:
+        self._require_model("helix_thread")
+        self._execute_all(
+            calls.helix_thread_calls(diameter, pitch, length, right_handed, revolutions, name)
+        )
+
     # -- drawing operations (v0.4) -------------------------------------
 
     def create_drawing(self, setup: DrawingSetup) -> None:

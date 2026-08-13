@@ -138,6 +138,39 @@ class MockBackend(Backend):
     def save_part(self, path: str) -> None:
         self.call_log.extend(calls.save_part_calls(path))
 
+    def draw_spline(self, points: list[tuple[float, float]]) -> None:
+        self.call_log.extend(calls.draw_spline_calls(points))
+
+    def draw_arc(
+        self,
+        center: tuple[float, float],
+        start: tuple[float, float],
+        end: tuple[float, float],
+        ccw: bool,
+    ) -> None:
+        self.call_log.extend(calls.draw_arc_calls(center, start, end, ccw))
+
+    def draw_line(
+        self, start: tuple[float, float], end: tuple[float, float]
+    ) -> None:
+        self.call_log.extend(calls.draw_line_calls(start, end))
+
+    def revolve(self, axis_feature: str, angle: float, reverse: bool, name: str) -> None:
+        self.call_log.extend(calls.revolve_calls(axis_feature, angle, reverse, name))
+
+    def helix_thread(
+        self,
+        diameter: float,
+        pitch: float,
+        length: float,
+        right_handed: bool,
+        revolutions: float,
+        name: str,
+    ) -> None:
+        self.call_log.extend(
+            calls.helix_thread_calls(diameter, pitch, length, right_handed, revolutions, name)
+        )
+
     def create_drawing(self, setup: DrawingSetup) -> None:
         # The title-block properties live on the model document; switch to
         # it first if the drawing flow left another document active.

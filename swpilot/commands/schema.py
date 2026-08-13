@@ -1,4 +1,4 @@
-"""Pydantic models for the SW-Pilot command schema (v0.4, accepts v0.1-v0.3).
+"""Pydantic models for the SW-Pilot command schema (v0.5, accepts v0.1-v0.4).
 
 Two tiers share one discriminated union keyed on ``op``:
 
@@ -17,7 +17,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_valida
 
 from swpilot.model.presets import FASTENER_PRESETS, preset_names
 
-SCHEMA_VERSION = "0.4"
+SCHEMA_VERSION = "0.5"
 
 
 def _reject_bool(v: object) -> object:
@@ -409,6 +409,76 @@ class SavePart(_Cmd):
 
 
 # --------------------------------------------------------------------------
+# Curve primitives (v0.5): spline/arc/line sketch entities + revolve
+# --------------------------------------------------------------------------
+
+
+class DrawSpline(_Cmd):
+    """Add an interpolating spline through points to the active sketch.
+
+    Curve entities (spline/arc/line) form a curved profile and cannot
+    share a sketch with rectangles/circles/slots. Emitted by the gear and
+    sprocket macros; also usable directly for custom curved profiles.
+    """
+
+    op: Literal["draw_spline"] = "draw_spline"
+    points: list[Point2D] = Field(min_length=2)
+    kind: str | None = None
+
+
+class DrawArc(_Cmd):
+    """Add a circular arc (center + two endpoints) to the active sketch."""
+
+    op: Literal["draw_arc"] = "draw_arc"
+    center: Point2D
+    start: Point2D
+    end: Point2D
+    ccw: bool = True
+    kind: str | None = None
+
+
+class DrawLine(_Cmd):
+    """Add a straight line segment to the active sketch."""
+
+    op: Literal["draw_line"] = "draw_line"
+    start: Point2D
+    end: Point2D
+    kind: str | None = None
+
+    @model_validator(mode="after")
+    def _check_span(self) -> DrawLine:
+        if self.start == self.end:
+            raise ValueError("draw_line: start and end coincide")
+        return self
+
+
+class Revolve(_Cmd):
+    """Revolve the active sketch profile about a world axis (through origin).
+
+    The axis must lie in the sketch plane. ``angle`` < 360 makes a partial
+    revolve. Consumes the active sketch (prismatic or curved).
+    """
+
+    op: Literal["revolve"] = "revolve"
+    axis: AxisName
+    angle: Annotated[float, Field(gt=0, le=360, allow_inf_nan=False)] = 360.0
+    reverse: bool = False
+
+
+class GearMeta(_Cmd):
+    """Internal: tag the active part with involute-gear invariants.
+
+    Emitted by the involute_spur_gear macro so assemblies can verify a
+    mesh between two gear components. No COM calls; twin bookkeeping only.
+    """
+
+    op: Literal["gear_meta"] = "gear_meta"
+    module: PositiveMm
+    teeth: Annotated[int, Field(ge=4)]
+    pressure_angle: Annotated[float, Field(gt=0, lt=45, allow_inf_nan=False)] = 20.0
+
+
+# --------------------------------------------------------------------------
 # Drawings (v0.4)
 # --------------------------------------------------------------------------
 
@@ -562,6 +632,98 @@ class BoltCircle(_Cmd):
     prefix: str = "bolt"
 
 
+class Keyway(_Sub):
+    """A rectangular keyway (DIN 6885 style) cut into a bore."""
+
+    width: PositiveMm
+    depth: PositiveMm  # radial depth past the bore wall
+
+
+class InvoluteSpurGear(_Cmd):
+    """A true involute spur gear: root cylinder + patterned tooth + bore.
+
+    Generates a real involute tooth flank (parametric involute + tangent
+    root fillet + tip land), boss-extrudes it on a root-diameter cylinder,
+    and circular-patterns it ``teeth`` times. Standard metric geometry
+    (addendum m, dedendum 1.25m). Optional hub boss and keyway.
+    """
+
+    op: Literal["involute_spur_gear"] = "involute_spur_gear"
+    module: PositiveMm
+    teeth: Annotated[int, Field(ge=4)]
+    face_width: PositiveMm
+    bore: PositiveMm  # bore diameter
+    pressure_angle: Annotated[float, Field(gt=0, lt=45, allow_inf_nan=False)] = 20.0
+    hub_diameter: PositiveMm | None = None
+    hub_length: PositiveMm | None = None
+    keyway: Keyway | None = None
+    name: str | None = None
+
+    @model_validator(mode="after")
+    def _check_hub(self) -> InvoluteSpurGear:
+        if (self.hub_diameter is None) != (self.hub_length is None):
+            raise ValueError(
+                "involute_spur_gear: give both hub_diameter and hub_length, or neither"
+            )
+        if self.hub_diameter is not None and self.hub_diameter <= self.bore:
+            raise ValueError(
+                "involute_spur_gear: hub_diameter must exceed the bore diameter"
+            )
+        return self
+
+
+class InternalRingGear(_Cmd):
+    """An internal ring gear: involute teeth cut inward into a rim."""
+
+    op: Literal["internal_ring_gear"] = "internal_ring_gear"
+    module: PositiveMm
+    teeth: Annotated[int, Field(ge=8)]
+    face_width: PositiveMm
+    rim_outer_diameter: PositiveMm
+    pressure_angle: Annotated[float, Field(gt=0, lt=45, allow_inf_nan=False)] = 20.0
+    name: str | None = None
+
+
+class SprocketIso(_Cmd):
+    """An ISO-606 roller-chain sprocket (real tooth profile)."""
+
+    op: Literal["sprocket_iso"] = "sprocket_iso"
+    chain: str  # e.g. "08B", "10B", "12B", "16B"
+    teeth: Annotated[int, Field(ge=6)]
+    face_width: PositiveMm
+    bore: PositiveMm
+    keyway: Keyway | None = None
+    name: str | None = None
+
+
+class HelixThread(_Cmd):
+    """A cosmetic swept helical rib for visual threads (not load-bearing).
+
+    Sweeps a small triangular rib along a helix on the last cylindrical
+    boss. Cosmetic only — never a true thread form.
+    """
+
+    op: Literal["helix_thread"] = "helix_thread"
+    diameter: PositiveMm  # nominal thread (cylinder) diameter
+    pitch: PositiveMm
+    length: PositiveMm
+    right_handed: bool = True
+    on_feature: str | None = None
+
+
+class GearMeshCheck(_Cmd):
+    """Verify two gear components in the active assembly mesh (no COM).
+
+    Reports whether they mesh (equal module + pressure angle) and the
+    standard center distance a = m·(z1+z2)/2; a mismatch fails validation.
+    """
+
+    op: Literal["gear_mesh_check"] = "gear_mesh_check"
+    a: str  # component instance name
+    b: str
+    expected_center_distance: PositiveMm | None = None
+
+
 class AddCornerHoles(_Cmd):
     """Four through-holes, one per corner of the last rectangular boss.
 
@@ -684,12 +846,26 @@ PrimitiveCommand = Annotated[
     | IsometricView
     | SectionView
     | SmartDimensions
-    | SaveDrawing,
+    | SaveDrawing
+    | DrawSpline
+    | DrawArc
+    | DrawLine
+    | Revolve
+    | HelixThread
+    | GearMeta,
     Field(discriminator="op"),
 ]
 
 MacroCommand = Annotated[
-    CreatePlate | AddCornerHoles | Hole | BoltCircle, Field(discriminator="op")
+    CreatePlate
+    | AddCornerHoles
+    | Hole
+    | BoltCircle
+    | InvoluteSpurGear
+    | InternalRingGear
+    | SprocketIso
+    | GearMeshCheck,
+    Field(discriminator="op"),
 ]
 
 Command = Annotated[
@@ -718,10 +894,20 @@ Command = Annotated[
     | SectionView
     | SmartDimensions
     | SaveDrawing
+    | DrawSpline
+    | DrawArc
+    | DrawLine
+    | Revolve
+    | GearMeta
     | CreatePlate
     | AddCornerHoles
     | Hole
-    | BoltCircle,
+    | BoltCircle
+    | InvoluteSpurGear
+    | InternalRingGear
+    | SprocketIso
+    | HelixThread
+    | GearMeshCheck,
     Field(discriminator="op"),
 ]
 
@@ -752,9 +938,26 @@ PRIMITIVE_OPS = frozenset(
         "section_view",
         "smart_dimensions",
         "save_drawing",
+        "draw_spline",
+        "draw_arc",
+        "draw_line",
+        "revolve",
+        "gear_meta",
+        "helix_thread",
     }
 )
-MACRO_OPS = frozenset({"create_plate", "add_corner_holes", "hole", "bolt_circle"})
+MACRO_OPS = frozenset(
+    {
+        "create_plate",
+        "add_corner_holes",
+        "hole",
+        "bolt_circle",
+        "involute_spur_gear",
+        "internal_ring_gear",
+        "sprocket_iso",
+        "gear_mesh_check",
+    }
+)
 
 
 class CommandFile(BaseModel):
@@ -762,5 +965,5 @@ class CommandFile(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["0.1", "0.2", "0.3", "0.4"]
+    schema_version: Literal["0.1", "0.2", "0.3", "0.4", "0.5"]
     commands: list[Command] = Field(min_length=1)

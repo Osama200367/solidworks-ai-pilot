@@ -21,20 +21,30 @@ from swpilot.commands.schema import (
     CreatePlate,
     CreateSketch,
     CutExtrude,
+    DrawArc,
     DrawCircle,
+    DrawLine,
     DrawRectangle,
+    DrawSpline,
     Extrude,
     FaceRef,
     FacingName,
+    GearMeshCheck,
+    GearMeta,
     Hole,
     InsertComponent,
+    InternalRingGear,
+    InvoluteSpurGear,
+    Keyway,
     LinearPattern,
     Mate,
     MateCylinder,
     MateFace,
     NewPart,
     RotationStepSpec,
+    SprocketIso,
 )
+from swpilot.model import curves as cv
 from swpilot.model import geometry as g
 from swpilot.model.planes import AXIS_VECTORS, FAMILY_FOR_AXIS, PlaneFamily, Vec3
 from swpilot.model.session import SessionTracker
@@ -468,11 +478,190 @@ def expand_pattern_axes(
     return [*(CreateAxis(axis=a) for a in missing), cmd]  # type: ignore[arg-type]
 
 
+# --------------------------------------------------------------------------
+# Curve macros (v0.5)
+# --------------------------------------------------------------------------
+
+
+def _draw_loop(segments: object, kind: str) -> list[Emitted]:
+    """Emit draw_spline/arc/line primitives for a curve segment loop."""
+    out: list[Emitted] = []
+    for seg in segments:  # type: ignore[attr-defined]
+        if isinstance(seg, cv.SplineSeg):
+            out.append(DrawSpline(points=list(seg.points), kind=kind))
+        elif isinstance(seg, cv.ArcSeg):
+            out.append(
+                DrawArc(center=seg.center, start=seg.start, end=seg.end,
+                        ccw=seg.ccw, kind=kind)
+            )
+        else:
+            out.append(DrawLine(start=seg.start, end=seg.end, kind=kind))
+    return out
+
+
+def _keyway_cut(keyway: Keyway, bore: float) -> list[Emitted]:
+    """A rectangular keyway slot cut through, on top of the bore (front plane)."""
+    # The keyway sits at the top of the bore: a rectangle spanning the key
+    # width, from just inside the bore wall out by `depth`.
+    r = bore / 2.0
+    cy = r + keyway.depth / 2.0
+    return [
+        CreateSketch(plane="front"),
+        DrawRectangle(center=(0.0, cy), width=keyway.width, height=keyway.depth + r),
+        CutExtrude(through_all=True),
+    ]
+
+
+def expand_involute_spur_gear(cmd: InvoluteSpurGear) -> list[Emitted]:
+    tp = cv.spur_gear_tooth(cmd.module, cmd.teeth, cmd.pressure_angle)
+    inv = tp.invariants
+    if cmd.bore >= inv.root_dia - 2.0 * cmd.module:
+        raise MacroExpansionError(
+            f"involute_spur_gear: bore Ø{cmd.bore} leaves less than one module of rim "
+            f"under the root circle Ø{inv.root_dia:g}; use a smaller bore"
+        )
+    if inv.pointed_tip:
+        raise MacroExpansionError(
+            f"involute_spur_gear: z={cmd.teeth} at module {cmd.module} produces a "
+            "pointed tooth (no tip land); increase the tooth count"
+        )
+    out: list[Emitted] = [NewPart(name=cmd.name)]
+    # root-diameter cylinder
+    out += [
+        CreateSketch(plane="front"),
+        DrawCircle(diameter=inv.root_dia),
+        Extrude(depth=cmd.face_width),
+    ]
+    # one tooth boss from the involute profile
+    out.append(CreateSketch(plane="front"))
+    out += _draw_loop(tp.segments, "gear_tooth")
+    out.append(Extrude(depth=cmd.face_width))
+    # circular-pattern the tooth z times
+    out += [
+        CreateAxis(axis="z"),
+        CircularPattern(features=["Boss-Extrude2"], axis="z", count=cmd.teeth),
+    ]
+    # bore
+    out += [
+        CreateSketch(plane="front"),
+        DrawCircle(diameter=cmd.bore),
+        CutExtrude(through_all=True),
+    ]
+    if cmd.keyway is not None:
+        out += _keyway_cut(cmd.keyway, cmd.bore)
+    if cmd.hub_diameter is not None and cmd.hub_length is not None:
+        out += [
+            CreatePlane(name="hub_base", offset_from="front", distance=cmd.face_width),
+            CreateSketch(plane="hub_base"),
+            DrawCircle(diameter=cmd.hub_diameter),
+            Extrude(depth=cmd.hub_length),
+        ]
+    out.append(GearMeta(module=cmd.module, teeth=cmd.teeth, pressure_angle=cmd.pressure_angle))
+    return out
+
+
+def expand_internal_ring_gear(cmd: InternalRingGear) -> list[Emitted]:
+    try:
+        rg = cv.ring_gear_tooth_space(
+            cmd.module, cmd.teeth, cmd.rim_outer_diameter, cmd.pressure_angle
+        )
+    except ValueError as exc:
+        raise MacroExpansionError(f"internal_ring_gear: {exc}") from exc
+    inv = rg.invariants
+    out: list[Emitted] = [NewPart(name=cmd.name)]
+    # rim tube: outer cylinder, then bore out the inner circle to the tip
+    out += [
+        CreateSketch(plane="front"),
+        DrawCircle(diameter=cmd.rim_outer_diameter),
+        Extrude(depth=cmd.face_width),
+        CreateSketch(plane="front"),
+        DrawCircle(diameter=inv.tip_dia),
+        CutExtrude(through_all=True),
+    ]
+    # cut one tooth space, pattern z times
+    out.append(CreateSketch(plane="front"))
+    out += _draw_loop(rg.segments, "ring_space")
+    out += [
+        CutExtrude(through_all=True),
+        CreateAxis(axis="z"),
+        CircularPattern(features=["Cut-Extrude2"], axis="z", count=cmd.teeth),
+    ]
+    return out
+
+
+def expand_sprocket_iso(cmd: SprocketIso) -> list[Emitted]:
+    try:
+        sp = cv.sprocket_tooth(cmd.chain, cmd.teeth)
+    except ValueError as exc:
+        raise MacroExpansionError(f"sprocket_iso: {exc}") from exc
+    inv = sp.invariants
+    if cmd.bore >= inv.root_dia - 2.0:
+        raise MacroExpansionError(
+            f"sprocket_iso: bore Ø{cmd.bore} does not leave a rim under the tooth-gap "
+            f"root Ø{inv.root_dia:g}"
+        )
+    out: list[Emitted] = [NewPart(name=cmd.name)]
+    # tip-diameter blank, then cut one tooth gap and pattern
+    out += [
+        CreateSketch(plane="front"),
+        DrawCircle(diameter=inv.tip_dia),
+        Extrude(depth=cmd.face_width),
+    ]
+    out.append(CreateSketch(plane="front"))
+    out += _draw_loop(sp.segments, "sprocket_gap")
+    out += [
+        CutExtrude(through_all=True),
+        CreateAxis(axis="z"),
+        CircularPattern(features=["Cut-Extrude1"], axis="z", count=cmd.teeth),
+        CreateSketch(plane="front"),
+        DrawCircle(diameter=cmd.bore),
+        CutExtrude(through_all=True),
+    ]
+    if cmd.keyway is not None:
+        out += _keyway_cut(cmd.keyway, cmd.bore)
+    return out
+
+
+def expand_gear_mesh_check(cmd: GearMeshCheck, session: SessionTracker) -> list[Emitted]:
+    asm = session.active_assembly("gear_mesh_check")
+    ca, cb = asm.component(cmd.a), asm.component(cmd.b)
+    if ca.part is None or cb.part is None:
+        raise MacroExpansionError(
+            "gear_mesh_check: both components must be same-run gear parts"
+        )
+    ga, gb = ca.part.gear, cb.part.gear
+    if ga is None or gb is None:
+        missing = cmd.a if ga is None else cmd.b
+        raise MacroExpansionError(
+            f"gear_mesh_check: component {missing!r} is not an involute_spur_gear"
+        )
+    result = cv.check_mesh(ga, gb)
+    if not result.meshes:
+        raise MacroExpansionError(
+            f"gear_mesh_check: {cmd.a} and {cmd.b} do not mesh: "
+            + "; ".join(result.reasons)
+        )
+    if (
+        cmd.expected_center_distance is not None
+        and result.center_distance is not None
+        and abs(result.center_distance - cmd.expected_center_distance) > EPS
+    ):
+        raise MacroExpansionError(
+            f"gear_mesh_check: center distance {result.center_distance:g} mm "
+            f"≠ expected {cmd.expected_center_distance:g} mm"
+        )
+    return []  # pure validation, no emitted primitives
+
+
 __all__ = [
     "MacroExpansionError",
     "expand_add_corner_holes",
     "expand_create_plate",
+    "expand_gear_mesh_check",
     "expand_hole",
+    "expand_internal_ring_gear",
+    "expand_involute_spur_gear",
     "expand_pattern_axes",
     "expand_sketch_on_face",
+    "expand_sprocket_iso",
 ]

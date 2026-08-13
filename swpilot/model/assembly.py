@@ -101,10 +101,10 @@ class ComponentRec:
         if self.part is not None:
             mins = [float("inf")] * 3
             maxs = [float("-inf")] * 3
-            for f in self.part.features:
-                if f.kind != "boss":
-                    continue
-                lo, hi = self.part.feature_aabb(f.name)
+            # Prismatic bosses, curved bosses, and curved circular patterns
+            # (whole gears) all bound the part.
+            for name in self.part.solid_features():
+                lo, hi = self.part.feature_aabb(name)
                 for i in range(3):
                     mins[i] = min(mins[i], lo[i])
                     maxs[i] = max(maxs[i], hi[i])

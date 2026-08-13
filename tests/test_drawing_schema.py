@@ -15,8 +15,8 @@ from swpilot.commands.schema import (
 
 
 class TestVersioning:
-    def test_schema_version_is_04(self) -> None:
-        assert SCHEMA_VERSION == "0.4"
+    def test_schema_version_is_05(self) -> None:
+        assert SCHEMA_VERSION == "0.5"
 
     @pytest.mark.parametrize("version", ["0.1", "0.2", "0.3", "0.4"])
     def test_all_prior_versions_accepted(self, version: str) -> None:

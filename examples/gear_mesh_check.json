@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.5",
+  "commands": [
+    {
+      "op": "involute_spur_gear",
+      "name": "pinion",
+      "module": 2, "teeth": 20, "pressure_angle": 20,
+      "face_width": 20, "bore": 16,
+      "keyway": { "width": 5, "depth": 2.3 }
+    },
+    { "op": "save_part", "path": "pinion.SLDPRT" },
+    {
+      "op": "involute_spur_gear",
+      "name": "wheel",
+      "module": 2, "teeth": 40, "pressure_angle": 20,
+      "face_width": 20, "bore": 20
+    },
+    { "op": "save_part", "path": "wheel.SLDPRT" },
+    { "op": "new_assembly", "name": "gear_pair" },
+    { "op": "insert_component", "part": "pinion", "name": "pinion_1", "fixed": true },
+    { "op": "insert_component", "part": "wheel", "name": "wheel_1", "at": [60, 0, 0] },
+    {
+      "op": "gear_mesh_check",
+      "a": "pinion_1", "b": "wheel_1",
+      "expected_center_distance": 60
+    },
+    { "op": "save_assembly", "path": "gear_pair.SLDASM" }
+  ]
+}

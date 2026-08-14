@@ -1,12 +1,12 @@
 # ============================================================
-# SW-Pilot — SolidWorks AI Automation
+# Sanay3i (صنايعي) — AI-Powered Mechanical CAD Automation
 # Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
 # Proprietary and confidential. Unauthorized copying, use, or
 # distribution of this file, via any medium, is strictly prohibited.
-# Author & Owner: Eng. Osama Isa Ali Alassar
+# Product: Sanay3i (صنايعي)  |  Owner: Eng. Osama Isa Ali Alassar
 # ============================================================
 
-"""SW-Pilot command-line interface.
+"""Sanay3i (صنايعي) command-line interface.
 
 Exit codes: 0 success; 1 execution failure; 2 invalid command file.
 """
@@ -32,7 +32,8 @@ from swpilot.executor import execute
 
 app = typer.Typer(
     name="swpilot",
-    help="JSON-driven SolidWorks automation with a CI-friendly mock backend.",
+    help="Sanay3i (صنايعي) — AI-powered mechanical CAD automation "
+    "(JSON-driven, with a CI-friendly mock backend).",
     no_args_is_help=True,
 )
 
@@ -208,7 +209,7 @@ def ai(
         bool, typer.Option("--yes", help="Skip the confirmation prompt before execution")
     ] = False,
 ) -> None:
-    """Translate a description into SW-Pilot commands via an LLM.
+    """Translate a description into Sanay3i commands via an LLM.
 
     copy-paste (default): prints a prompt bundle to paste into ANY free AI
     chat; paste the AI's JSON back through `swpilot ai-apply`. No API key.

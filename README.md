@@ -1,8 +1,11 @@
-# SW-Pilot
+# Sanay3i (صنايعي)
 
-AI-powered automation layer for SolidWorks. A user describes a part in plain
-language, an LLM translates that into structured JSON commands, and SW-Pilot
-executes them in SolidWorks through its COM API.
+**AI-powered automation for mechanical CAD — describe a part in Arabic or
+English, and it's drawn.**
+
+A user describes a part in plain language (or speaks it), an LLM translates
+that into structured JSON commands, and Sanay3i executes them in SolidWorks
+through its COM API.
 
 ## Ownership & License
 
@@ -11,10 +14,14 @@ Copyright © 2026 **Eng. Osama Isa Ali Alassar** (المهندس أسامة عي
 **All Rights Reserved.**
 
 Eng. Osama Isa Ali Alassar is the sole author, designer, and owner of
-SW-Pilot and all of its components. This repository is shared **for review
-only** — access grants no license or right to use, copy, modify, or
+Sanay3i (صنايعي) and all of its components. This repository is shared **for
+review only** — access grants no license or right to use, copy, modify, or
 redistribute any part of it. See [LICENSE](LICENSE) and [NOTICE](NOTICE)
 for the full terms and the declaration of authorship.
+
+Third-party trademarks — including SOLIDWORKS, a trademark of Dassault
+Systemes — belong to their respective owners; Sanay3i is an independent
+work, not affiliated with or endorsed by them.
 
 **Current scope (v1.1)**: the whole pipeline, now **voice-driven too**. You
 can *speak* a part/assembly description — Arabic or English — and it flows

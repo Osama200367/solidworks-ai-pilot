@@ -23,9 +23,16 @@ Third-party trademarks — including SOLIDWORKS, a trademark of Dassault
 Systemes — belong to their respective owners; Sanay3i is an independent
 work, not affiliated with or endorsed by them.
 
-**Current scope (v1.1)**: the whole pipeline, now **voice-driven too**. You
-can *speak* a part/assembly description — Arabic or English — and it flows
-through the exact same path as typing it. A **natural-language layer**
+**Current scope (v1.2)**: the whole pipeline — typed, **spoken**, or driven
+by the **Parts Studio catalog** over a localhost bridge (`swpilot bridge`,
+see [docs/BRIDGE.md](docs/BRIDGE.md)) — with **robust understanding**:
+messy compound requests, mixed Arabic/English, dialect phrasing, implicit
+standards, and graceful bilingual "coming soon" answers for features the
+engine can't do yet (computed live from the op set, never a stale list),
+plus a "skipped" report + confirmation whenever only part of a request is
+understood. You can *speak* a part/assembly description — Arabic or
+English — and it flows through the exact same path as typing it. A
+**natural-language layer**
 turns a plain-language description into the same structured JSON the engine
 already validates, expands, and executes. It is deliberately model-agnostic:
 the primary **copy-paste mode** generates a self-contained prompt bundle you

@@ -8,4 +8,4 @@
 
 """SW-Pilot: JSON-driven automation layer for SolidWorks."""
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"

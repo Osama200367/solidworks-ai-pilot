@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swpilot"
-version = "1.1.0"
+version = "1.2.0"
 description = "Sanay3i (صنايعي): AI-powered mechanical CAD automation — describe a part in Arabic or English, and it's drawn"
 keywords = ["sanay3i", "cad", "automation", "solidworks", "ai", "arabic", "voice"]
 readme = "README.md"

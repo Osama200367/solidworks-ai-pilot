@@ -18,12 +18,17 @@ repair prompt to the user.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from swpilot.commands.loader import CommandFileError, parse_command_data
 from swpilot.commands.schema import CommandFile
 from swpilot.llm.extract import ExtractionError, extract_json
 from swpilot.llm.prompt import build_repair_prompt
+
+# Bounds on the model-supplied "skipped" list (untrusted): enough to describe
+# real omissions, small enough that a hostile response can't bloat output.
+_MAX_SKIPPED_ITEMS = 20
+_MAX_SKIPPED_LEN = 300
 
 
 @dataclass
@@ -34,22 +39,41 @@ class RepairOutcome:
     errors: str | None = None  # formatted validation/extraction errors
     repair_prompt: str | None = None  # paste-back prompt when unresolved
     repaired: bool = False  # a repair pass was used and succeeded
+    skipped: list[str] = field(default_factory=list)  # model-declared omissions
 
     @property
     def ok(self) -> bool:
         return self.command_file is not None
 
 
-def _validate(response: str) -> tuple[CommandFile | None, str | None]:
-    """(command_file, None) on success; (None, error_text) on failure."""
+def _take_skipped(data: dict[str, object]) -> list[str]:
+    """Pop the optional envelope-level "skipped" list (model-declared omissions).
+
+    Removed BEFORE CommandFile validation so the engine schema stays
+    ``extra="forbid"``; sanitized because it is model-authored text that will
+    be shown to the user.
+    """
+    raw = data.pop("skipped", None)
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw[:_MAX_SKIPPED_ITEMS]:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip()[:_MAX_SKIPPED_LEN])
+    return out
+
+
+def _validate(response: str) -> tuple[CommandFile | None, str | None, list[str]]:
+    """(command_file, None, skipped) on success; (None, error, []) on failure."""
     try:
         data = extract_json(response)
     except ExtractionError as exc:
-        return None, str(exc)
+        return None, str(exc), []
+    skipped = _take_skipped(data)
     try:
-        return parse_command_data(data), None
+        return parse_command_data(data), None, skipped
     except CommandFileError as exc:
-        return None, str(exc)
+        return None, str(exc), []
 
 
 def validate_or_repair(
@@ -63,9 +87,9 @@ def validate_or_repair(
     the model's second response; without it (copy-paste mode) the outcome
     carries the repair prompt for the user to run manually.
     """
-    cf, errors = _validate(response)
+    cf, errors, skipped = _validate(response)
     if cf is not None:
-        return RepairOutcome(command_file=cf)
+        return RepairOutcome(command_file=cf, skipped=skipped)
 
     repair_prompt = build_repair_prompt(request, response, errors or "")
     if retry is None:
@@ -75,9 +99,9 @@ def validate_or_repair(
 
     # one automatic repair attempt
     second = retry(repair_prompt)
-    cf2, errors2 = _validate(second)
+    cf2, errors2, skipped2 = _validate(second)
     if cf2 is not None:
-        return RepairOutcome(command_file=cf2, repaired=True)
+        return RepairOutcome(command_file=cf2, repaired=True, skipped=skipped2)
     # still invalid after one repair — surface the second round's errors
     return RepairOutcome(
         command_file=None,

@@ -21,13 +21,22 @@ from swpilot.llm.vocabulary import vocabulary_text
 
 _SYSTEM = """\
 You are a translator from a plain-language mechanical-part description into
-SW-Pilot command JSON. SW-Pilot builds parts, assemblies, drawings and gears
+Sanay3i command JSON. Sanay3i builds parts, assemblies, drawings and gears
 in SolidWorks. Your ONLY output is a single JSON object (a "CommandFile") that
 conforms exactly to the vocabulary below. Do not explain, do not add prose or
 markdown — output only the JSON object.
 
-The request may be in Arabic or English; interpret either, but the JSON keys and
-enum values are always English."""
+The request may be in Arabic or English (or a mix); interpret either, but the
+JSON keys and enum values are always English. Casual dialect phrasing and
+implicit standards are fine — e.g. "standard M8 clearance hole" means a "hole"
+command with "standard": "M8".
+
+PARTIAL UNDERSTANDING: if part of the request cannot be expressed with the
+vocabulary below, still produce the commands you CAN, and add a top-level
+"skipped" array next to "commands" listing briefly (in the requester's
+language) what you left out and why. NEVER invent an op that is not in the
+vocabulary, and never silently drop part of the request without listing it
+in "skipped"."""
 
 
 def _few_shot_block() -> str:

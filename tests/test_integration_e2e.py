@@ -226,7 +226,7 @@ class TestEntryPathSafetyGate:
 class TestContractConsistency:
     def test_schema_and_package_versions(self) -> None:
         assert sc.SCHEMA_VERSION == "0.5"  # the voice/LLM layers add no commands
-        assert swpilot.__version__ == "1.1.0"
+        assert swpilot.__version__ == "1.2.0"
         pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         assert pyproject["project"]["version"] == swpilot.__version__
         extras = pyproject["project"]["optional-dependencies"]
@@ -235,8 +235,8 @@ class TestContractConsistency:
     def test_docs_reference_current_version(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
-        assert "v1.1" in readme
-        assert "### v1.1 — Voice layer ◀ current phase" in roadmap
+        assert "v1.2" in readme
+        assert "### v1.2 — Robust understanding + the catalog bridge ◀ current phase" in roadmap
 
     def test_vocabulary_covers_every_engine_op(self) -> None:
         # the LLM can be told about every op the engine can execute

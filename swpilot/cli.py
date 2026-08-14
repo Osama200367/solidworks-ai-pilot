@@ -219,12 +219,43 @@ def ai(
     """
     from swpilot.llm import build_bundle
 
+    _warn_unsupported(description)
     bundle = build_bundle(description)
     if mode is AiMode.copy_paste:
         _emit_bundle(bundle, out)
         return
 
     _ai_api(description, bundle, backend, save, yes)
+
+
+def _warn_unsupported(text: str) -> None:
+    """Bilingual 'coming soon' notice for features the engine can't do yet.
+
+    Detection is deterministic and computed from the live op set (see
+    ``swpilot.llm.features``); the request still proceeds so the supported
+    part of it gets built.
+    """
+    from swpilot.llm.features import coming_soon_message, detect_unsupported
+
+    for feat in detect_unsupported(text):
+        typer.secho(coming_soon_message(feat), fg=typer.colors.YELLOW, err=True)
+        typer.echo("", err=True)
+
+
+def _warn_coming_soon_ops(errors: str) -> bool:
+    """Friendly message when validation failed on a known coming-soon op."""
+    import re as _re
+
+    from swpilot.llm.features import coming_soon, coming_soon_message
+
+    mentioned = set(_re.findall(r"'(\w+)'", errors))
+    shown = False
+    for feat in coming_soon():
+        if feat.key in mentioned:
+            typer.secho(coming_soon_message(feat), fg=typer.colors.YELLOW, err=True)
+            typer.echo("", err=True)
+            shown = True
+    return shown
 
 
 def _emit_bundle(bundle: str, out: Path | None) -> None:
@@ -280,7 +311,7 @@ def _ai_api(
     if outcome.repaired:
         typer.secho("(the model's first JSON was auto-repaired)", fg=typer.colors.YELLOW, err=True)
     assert outcome.command_file is not None
-    _apply_command_file(outcome.command_file, backend, save, yes)
+    _apply_command_file(outcome.command_file, backend, save, yes, skipped=outcome.skipped)
 
 
 @app.command(name="ai-apply")
@@ -319,6 +350,9 @@ def ai_apply(
 
     outcome = validate_or_repair("(from copy-paste)", response)
     if not outcome.ok:
+        # If the failure is a known coming-soon feature, lead with the warm
+        # bilingual notice instead of a bare validation error.
+        _warn_coming_soon_ops(outcome.errors or "")
         typer.secho("the pasted JSON did not validate:", fg=typer.colors.RED, err=True)
         typer.secho(outcome.errors or "unknown error", fg=typer.colors.RED, err=True)
         typer.secho(
@@ -330,7 +364,7 @@ def ai_apply(
         typer.echo(outcome.repair_prompt or "")
         raise typer.Exit(code=2)
     assert outcome.command_file is not None
-    _apply_command_file(outcome.command_file, backend, None, yes)
+    _apply_command_file(outcome.command_file, backend, None, yes, skipped=outcome.skipped)
 
 
 def _apply_command_file(
@@ -338,6 +372,7 @@ def _apply_command_file(
     backend: BackendChoice,
     save: Path | None,
     yes: bool,
+    skipped: list[str] | None = None,
 ) -> None:
     """Show the parsed commands, confirm, then expand + execute (safety gate)."""
     try:
@@ -345,6 +380,22 @@ def _apply_command_file(
     except CommandFileError as exc:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=2) from exc
+
+    # Partial understanding: the model declared omissions. Show them and ask
+    # before building only part of the request — --yes deliberately does NOT
+    # bypass this confirmation (the user must see what was left out).
+    if skipped:
+        typer.secho(
+            "The model reported it could NOT express part of your request:",
+            fg=typer.colors.YELLOW,
+        )
+        for item in skipped:
+            typer.secho(f"  - {item}", fg=typer.colors.YELLOW)
+        if not typer.confirm(
+            "Build only the understood commands above?", default=False
+        ):
+            typer.secho("aborted (nothing executed)", fg=typer.colors.YELLOW)
+            raise typer.Exit(code=0)
 
     if save is not None:
         save.write_text(
@@ -440,6 +491,7 @@ def voice(
         typer.secho("no speech text to work with", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=2)
     typer.secho(f'heard: "{normalized}"', fg=typer.colors.CYAN, err=True)
+    _warn_unsupported(normalized)
 
     bundle = build_bundle(normalized)
     if mode is AiMode.copy_paste:
@@ -501,6 +553,43 @@ def _obtain_transcript(
     except STTRequestError as exc:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
+
+
+# --------------------------------------------------------------------------
+# Catalog ↔ engine bridge (v1.2)
+# --------------------------------------------------------------------------
+
+
+@app.command()
+def bridge(
+    port: Annotated[int, typer.Option(help="Port on 127.0.0.1 to listen on")] = 8765,
+    backend: Annotated[
+        BackendChoice, typer.Option(help="Execution backend for confirmed runs")
+    ] = BackendChoice.mock,
+) -> None:
+    """Serve the local catalog↔engine bridge (localhost only).
+
+    The Parts Studio catalog POSTs a CommandFile to /v1/commandfile, shows
+    the returned command-list preview to the user, and only executes after
+    the user confirms via /v1/execute with the one-time token — the same
+    validate → preview → confirm → execute pipeline the CLI enforces.
+    """
+    from swpilot.bridge import create_server
+
+    server = create_server(port=port, backend=backend.value)
+    host, actual_port = server.server_address[:2]
+    typer.secho(
+        f"Sanay3i bridge listening on http://{host!s}:{actual_port} "
+        f"(backend: {backend.value}) — Ctrl+C to stop",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        typer.secho("bridge stopped", fg=typer.colors.YELLOW, err=True)
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":

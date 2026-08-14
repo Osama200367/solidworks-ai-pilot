@@ -248,7 +248,9 @@ def _warn_coming_soon_ops(errors: str) -> bool:
 
     from swpilot.llm.features import coming_soon, coming_soon_message
 
-    mentioned = set(_re.findall(r"'(\w+)'", errors))
+    # Only the discriminated-union tag error names an op; a broad quoted-word
+    # scan would also match echoed field values (e.g. an unknown hole standard).
+    mentioned = set(_re.findall(r"[Ii]nput tag '(\w+)'", errors))
     shown = False
     for feat in coming_soon():
         if feat.key in mentioned:
@@ -342,6 +344,12 @@ def ai_apply(
 
     if paste:
         response = sys.stdin.read()
+        # stdin is now at EOF; reattach the controlling terminal so a later
+        # partial-build confirmation prompt can still be answered.
+        import contextlib
+
+        with contextlib.suppress(OSError):
+            sys.stdin = open("/dev/tty", encoding="utf-8")  # noqa: SIM115
     elif file is not None:
         response = file.read_text(encoding="utf-8-sig")
     else:
@@ -365,6 +373,25 @@ def ai_apply(
         raise typer.Exit(code=2)
     assert outcome.command_file is not None
     _apply_command_file(outcome.command_file, backend, None, yes, skipped=outcome.skipped)
+
+
+def _confirm_partial_build() -> bool:
+    """Confirm building only the understood commands (never bypassed by --yes).
+
+    Fail closed: if no input is available to answer the prompt (e.g. stdin was
+    consumed by --paste and no terminal could be reattached), decline rather
+    than raising an opaque abort.
+    """
+    try:
+        return bool(typer.confirm("Build only the understood commands above?", default=False))
+    except typer.Abort:
+        typer.secho(
+            "no input to confirm the partial build; save the response to a file "
+            "and run `swpilot ai-apply <file>`",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+        return False
 
 
 def _apply_command_file(
@@ -391,9 +418,7 @@ def _apply_command_file(
         )
         for item in skipped:
             typer.secho(f"  - {item}", fg=typer.colors.YELLOW)
-        if not typer.confirm(
-            "Build only the understood commands above?", default=False
-        ):
+        if not _confirm_partial_build():
             typer.secho("aborted (nothing executed)", fg=typer.colors.YELLOW)
             raise typer.Exit(code=0)
 

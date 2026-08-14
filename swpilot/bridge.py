@@ -38,9 +38,10 @@ import threading
 import time
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 import swpilot
-from swpilot.backends.base import Backend
+from swpilot.backends.base import Backend, BackendError
 from swpilot.commands.loader import (
     CommandFileError,
     ExpandedCommand,
@@ -52,9 +53,13 @@ from swpilot.executor import execute
 
 MAX_BODY_BYTES = 1024 * 1024  # 1 MiB
 TOKEN_TTL_SECONDS = 600.0  # a preview must be confirmed within 10 minutes
+MAX_PENDING = 256  # cap live previews so un-confirmed ones can't exhaust memory
+READ_TIMEOUT_SECONDS = 10  # abort stalled request reads (Content-Length lies)
 _LOOPBACK_ADDRS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
-_LOCAL_ORIGIN_PREFIXES = ("http://localhost", "https://localhost",
-                          "http://127.0.0.1", "https://127.0.0.1")
+# Exact loopback hosts — an Origin must parse to one of these (never a prefix
+# match, which would let http://localhost.evil.com through).
+_LOCAL_ORIGIN_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_LOCAL_ORIGIN_SCHEMES = frozenset({"http", "https"})
 
 
 class BridgeError(RuntimeError):
@@ -80,6 +85,10 @@ class BridgeState:
         token = secrets.token_urlsafe(32)
         with self.lock:
             self._prune()
+            # Bound live memory: evict the soonest-expiring preview if full.
+            while len(self.pending) >= MAX_PENDING:
+                oldest = min(self.pending, key=lambda t: self.pending[t].expires_at)
+                del self.pending[oldest]
             self.pending[token] = _Pending(cf, expanded, time.monotonic() + TOKEN_TTL_SECONDS)
         return token
 
@@ -88,6 +97,12 @@ class BridgeState:
         with self.lock:
             self._prune()
             return self.pending.pop(token, None)
+
+    def restore_pending(self, token: str, pending: _Pending) -> None:
+        """Put a taken token back (e.g. backend failed to start — don't burn it)."""
+        with self.lock:
+            if pending.expires_at > time.monotonic():
+                self.pending[token] = pending
 
     def _prune(self) -> None:
         now = time.monotonic()
@@ -126,6 +141,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     server_version = "SanayiBridge/" + swpilot.__version__
     protocol_version = "HTTP/1.1"
+    timeout = READ_TIMEOUT_SECONDS  # StreamRequestHandler applies it to the socket
 
     # -- plumbing ----------------------------------------------------------
 
@@ -141,7 +157,12 @@ class _Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         if origin is None:
             return True  # same-machine tools (curl, scripts) send no Origin
-        return origin.rstrip("/").startswith(_LOCAL_ORIGIN_PREFIXES)
+        try:
+            parts = urlsplit(origin)
+        except ValueError:
+            return False
+        # Exact host match — never a prefix, so localhost.evil.com is rejected.
+        return parts.scheme in _LOCAL_ORIGIN_SCHEMES and parts.hostname in _LOCAL_ORIGIN_HOSTS
 
     def _send_json(self, code: int, payload: dict[str, object]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -275,14 +296,20 @@ class _Handler(BaseHTTPRequestHandler):
             return
         try:
             backend = _make_backend(self._state.backend)
-        except BridgeError as exc:
-            self._send_json(500, {"error": str(exc)})
+        except (BridgeError, BackendError) as exc:
+            # The backend didn't start (e.g. SolidWorks/COM unavailable). Don't
+            # burn the confirmed preview — restore the token so it can retry.
+            self._state.restore_pending(token, pending)
+            self._send_json(503, {"error": str(exc)})
             return
         try:
             report = execute(
                 pending.expanded, backend,
                 schema_version=pending.command_file.schema_version,
             )
+        except BackendError as exc:
+            self._send_json(500, {"error": str(exc)})
+            return
         finally:
             backend.close()
         self._send_json(200, {"report": report.to_dict()})

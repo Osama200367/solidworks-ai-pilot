@@ -17,6 +17,7 @@ repair prompt to the user.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -29,6 +30,12 @@ from swpilot.llm.prompt import build_repair_prompt
 # real omissions, small enough that a hostile response can't bloat output.
 _MAX_SKIPPED_ITEMS = 20
 _MAX_SKIPPED_LEN = 300
+# C0/C1 controls (incl. ESC and newlines) and Unicode bidi override/isolate
+# chars: this text is printed into the CLI confirmation prompt, so ANSI escapes,
+# forged newlines, and RTL overrides must not survive.
+_UNSAFE_SKIPPED_CHARS = re.compile(
+    "[\x00-\x1f\x7f-\x9f‪-‮⁦-⁩]"
+)
 
 
 @dataclass
@@ -58,8 +65,12 @@ def _take_skipped(data: dict[str, object]) -> list[str]:
         return []
     out: list[str] = []
     for item in raw[:_MAX_SKIPPED_ITEMS]:
-        if isinstance(item, str) and item.strip():
-            out.append(item.strip()[:_MAX_SKIPPED_LEN])
+        if not isinstance(item, str):
+            continue
+        # Neutralize ANSI/control/bidi before this reaches the CLI prompt.
+        text = _UNSAFE_SKIPPED_CHARS.sub(" ", item).strip()[:_MAX_SKIPPED_LEN]
+        if text:
+            out.append(text)
     return out
 
 

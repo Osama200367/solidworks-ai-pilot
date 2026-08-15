@@ -1,0 +1,2889 @@
+<!DOCTYPE html>
+<!--
+============================================================
+ Sanay3i (صنايعي) — Parts Studio Catalog
+ Copyright (c) 2026 Eng. Osama Isa Ali Alassar (المهندس أسامة عيسى علي العصار). All Rights Reserved.
+ Proprietary and confidential. Unauthorized copying, use, or
+ distribution of this file, via any medium, is strictly prohibited.
+ Author & Owner: Eng. Osama Isa Ali Alassar (المهندس أسامة عيسى علي العصار)
+============================================================
+-->
+
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>صنايعي — استوديو القطع</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --board:#0E1520;      /* drafting table */
+  --board2:#0A0F18;     /* deeper edge */
+  --felt:#121B29;       /* raised panels */
+  --felt2:#16202F;      /* hover */
+  --sheet:#F4EFE4;      /* PAPER — warm cream drawing sheet */
+  --sheetedge:#E4DCC9;
+  --ink:#1B2431;        /* drawing ink on paper */
+  --inkblue:#2C4A63;    /* dimension ink */
+  --brass:#C8883A;      /* precision-instrument brass accent */
+  --brass2:#E0A552;
+  --chalk:#E8EDF4;      /* UI text on board */
+  --steel:#93A4BC;      /* muted UI */
+  --line:#24334A;       /* hairlines on board */
+  --dim:#657891;
+  --paperdim:#8A7F68;   /* muted on paper */
+  --ok:#4FA97A;
+  --warn:#C8883A;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans Arabic','IBM Plex Sans',sans-serif;
+  --disp:'Fraunces',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{
+  background:
+    radial-gradient(1200px 600px at 62% -5%, #16202f 0%, transparent 55%),
+    linear-gradient(180deg,var(--board) 0%, var(--board2) 100%);
+  color:var(--chalk);font-family:var(--sans);font-size:15px;min-height:100vh;
+}
+::selection{background:var(--brass);color:#1a1206}
+
+/* ── header ── */
+header{display:flex;align-items:center;gap:16px;padding:16px 30px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(18,27,41,.7),transparent);backdrop-filter:blur(4px)}
+.mark{display:flex;align-items:baseline;gap:11px}
+.mark .logo{font:600 22px/1 var(--disp);letter-spacing:.3px;color:var(--chalk)}
+.mark .logo i{color:var(--brass);font-style:normal}
+.mark .tag{font:400 11px var(--mono);color:var(--dim);letter-spacing:2px;text-transform:uppercase}
+header .grow{flex:1}
+.slot{position:relative}
+.slot input{width:230px;background:var(--board2);border:1px solid var(--line);border-radius:9px;
+  color:var(--chalk);font:500 13.5px var(--sans);padding:9px 13px 9px 34px}
+.slot input:focus{outline:none;border-color:var(--brass)}
+.slot::before{content:"⌕";position:absolute;inset-inline-start:11px;top:7px;color:var(--dim);font-size:17px}
+[dir=rtl] .slot input{padding:9px 34px 9px 13px}
+.btn{font:600 13.5px var(--sans);color:var(--chalk);background:var(--felt);
+  border:1px solid var(--line);border-radius:9px;padding:9px 15px;cursor:pointer;
+  transition:transform .12s,border-color .15s,background .15s}
+.btn:hover{border-color:var(--steel);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.btn.primary{background:linear-gradient(180deg,var(--brass2),var(--brass));border-color:var(--brass);color:#20160a;font-weight:700;
+  box-shadow:0 2px 12px rgba(200,136,58,.25)}
+.btn.primary:hover{filter:brightness(1.06)}
+.gear{width:40px;height:40px;display:grid;place-items:center;padding:0;font-size:17px}
+
+/* settings popover */
+.pop{position:absolute;top:64px;inset-inline-end:30px;z-index:50;background:var(--felt);
+  border:1px solid var(--line);border-radius:12px;padding:16px;min-width:220px;display:none;
+  box-shadow:0 20px 50px rgba(0,0,0,.55)}
+.pop.open{display:block}
+.pop h4{font:600 12px var(--mono);color:var(--dim);margin-bottom:11px;letter-spacing:1.5px;text-transform:uppercase}
+.langrow{display:flex;gap:8px}.langrow button{flex:1}
+.langrow .on{border-color:var(--brass);color:var(--brass2)}
+
+/* ── layout ── */
+main{display:grid;grid-template-columns:288px 1fr 340px;min-height:calc(100vh - 71px)}
+@media(max-width:1180px){main{grid-template-columns:260px 1fr}.tray{display:none}}
+@media(max-width:860px){main{grid-template-columns:1fr}nav{display:none}}
+
+/* ── index rail (left ledger) ── */
+nav{border-inline-end:1px solid var(--line);padding:18px 14px;overflow-y:auto;
+  max-height:calc(100vh - 71px);background:linear-gradient(180deg,rgba(10,15,24,.4),transparent)}
+nav::-webkit-scrollbar{width:8px}nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.ledger-h{font:600 10.5px var(--mono);color:var(--dim);letter-spacing:2px;margin:20px 8px 9px;
+  text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ledger-h span{flex:1}
+.ledger-h:first-child{margin-top:2px}
+.ledger-h b{color:var(--brass);font-weight:600;font-size:11px}
+.part{width:100%;display:flex;align-items:center;gap:12px;text-align:start;background:transparent;
+  border:1px solid transparent;border-inline-start:2px solid transparent;border-radius:9px;
+  padding:9px 11px;cursor:pointer;color:var(--chalk);font:500 14px var(--sans);position:relative;
+  transition:background .12s,border-color .12s}
+.part:hover{background:var(--felt)}
+.part.on{background:var(--felt);border-color:var(--line);border-inline-start-color:var(--brass)}
+.part.on .pname{color:var(--brass2)}
+.part svg{flex:none;stroke:var(--steel);fill:none;stroke-width:1.6;transition:stroke .12s}
+.part.on svg,.part:hover svg{stroke:var(--brass)}
+.part .pname{display:block;line-height:1.25}
+.part small{display:block;font:400 10.5px var(--mono);color:var(--dim);margin-top:1px}
+
+/* ── center: the spotlit sheet ── */
+.stage{padding:34px 40px 60px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  position:relative;overflow-y:auto;max-height:calc(100vh - 71px)}
+.stage::before{content:"";position:absolute;top:-40px;left:50%;transform:translateX(-50%);
+  width:680px;height:420px;background:radial-gradient(ellipse at center,rgba(232,224,200,.10),transparent 68%);
+  pointer-events:none;z-index:0}
+.sheetwrap{position:relative;z-index:1;width:100%;max-width:720px;animation:rise .5s cubic-bezier(.2,.7,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.sheet{background:
+    repeating-linear-gradient(0deg,transparent,transparent 43px,rgba(44,74,99,.035) 43px,rgba(44,74,99,.035) 44px),
+    repeating-linear-gradient(90deg,transparent,transparent 43px,rgba(44,74,99,.035) 43px,rgba(44,74,99,.035) 44px),
+    linear-gradient(180deg,var(--sheet),var(--sheetedge));
+  border:1px solid #cfc6b0;border-radius:3px;width:100%;aspect-ratio:760/540;display:block;
+  box-shadow:0 1px 0 rgba(255,255,255,.4) inset, 0 30px 60px -20px rgba(0,0,0,.65), 0 8px 20px -8px rgba(0,0,0,.4);
+  /* paper-scoped ink palette: drawing helpers read these vars, so ink renders on cream */
+  --ink:#1B2431; --signal:#255074; --dim:#9C8F73; --steel:#5E6B7E; --line:#C9BFA8;}
+.figcap{font:italic 400 15px var(--disp);color:var(--paperdim);margin-top:14px;text-align:center;
+  opacity:.85}
+.figcap b{color:var(--brass);font-style:normal;font-family:var(--mono);font-size:12px}
+
+/* ── right: instrument tray ── */
+.tray{border-inline-start:1px solid var(--line);padding:26px 24px;overflow-y:auto;
+  max-height:calc(100vh - 71px);background:linear-gradient(180deg,var(--felt),rgba(18,27,41,.3))}
+.tray::-webkit-scrollbar{width:8px}.tray::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.tray h2{font:600 21px/1.15 var(--disp);color:var(--chalk);margin-bottom:3px}
+.tray .sub{font:400 11px var(--mono);color:var(--dim);margin-bottom:18px;letter-spacing:.5px}
+.dfmwarn{background:linear-gradient(180deg,rgba(200,136,58,.12),rgba(200,136,58,.05));
+  border:1px solid rgba(200,136,58,.4);border-radius:10px;padding:11px 13px;margin-bottom:16px;
+  font:500 12.5px var(--sans);color:var(--brass2);line-height:1.55}
+.dfmwarn b{color:var(--brass2)}
+.field{margin-bottom:12px}
+.field label{display:flex;justify-content:space-between;align-items:baseline;
+  font:500 12.5px var(--sans);color:var(--steel);margin-bottom:6px}
+.field label code{font:500 11px var(--mono);color:var(--dim);letter-spacing:.5px}
+.field .inwrap{position:relative}
+.field input{width:100%;background:var(--board2);border:1px solid var(--line);border-radius:9px;
+  color:var(--chalk);font:600 15px var(--mono);padding:10px 40px 10px 13px;direction:ltr;text-align:left;
+  transition:border-color .15s}
+.field input:focus{outline:none;border-color:var(--brass)}
+.field input.bad{border-color:#c8452e}
+.field .unit{position:absolute;right:12px;top:11px;font:500 11px var(--mono);color:var(--dim);pointer-events:none}
+.hint{font:400 11.5px var(--sans);color:#d9834f;min-height:14px;margin-top:4px}
+.actions{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
+.actions .btn{flex:1;min-width:0}
+/* ═══ Bridge (send to SolidWorks) ═══ */
+.btn.bridge{background:linear-gradient(180deg,var(--brass2),var(--brass));color:#1a1206;font-weight:700;
+  border:1px solid rgba(0,0,0,.25);box-shadow:0 2px 10px rgba(200,136,58,.35)}
+.btn.bridge:hover{filter:brightness(1.07)}
+.btn.bridge:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.bridgestatus{font:400 11px var(--mono);margin-top:7px;line-height:1.6;min-height:14px}
+.bridgestatus.ok{color:var(--ok)}
+.bridgestatus.off{color:var(--dim)}
+.bridgestatus code{background:var(--felt2);padding:1px 6px;border-radius:4px;color:var(--chalk);
+  user-select:all;cursor:pointer}
+.bmodal-wrap{position:fixed;inset:0;background:rgba(8,12,20,.72);z-index:60;
+  display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}
+.bmodal{background:var(--felt);border:1px solid var(--line);border-radius:14px;max-width:560px;width:100%;
+  padding:26px;box-shadow:0 24px 70px rgba(0,0,0,.5);max-height:85vh;overflow:auto}
+.bmodal h3{font:700 17px var(--sans);color:var(--brass2);margin-bottom:4px}
+.bmodal-sub{font:400 12.5px var(--sans);color:var(--steel);margin-bottom:14px;line-height:1.6}
+.bmodal-cmds{background:var(--board2);border:1px solid var(--line);border-radius:9px;padding:13px 15px;
+  font:400 12px var(--mono);color:var(--chalk);max-height:240px;overflow:auto;line-height:1.85}
+.bmodal-cmds .op{color:var(--brass2);font-weight:600}
+.bmodal-cmds .pv{color:var(--steel)}
+.bmodal-result{margin-top:13px;padding:12px 15px;border-radius:9px;font:400 12.5px var(--sans);line-height:1.6}
+.bmodal-result.ok{background:rgba(79,169,122,.12);border:1px solid rgba(79,169,122,.4);color:var(--ok)}
+.bmodal-result.err{background:rgba(200,69,46,.1);border:1px solid rgba(200,69,46,.4);color:#e08876}
+.bmodal-actions{display:flex;gap:10px;margin-top:16px;justify-content:flex-end}
+.bmodal-actions .btn{min-width:110px}
+.icobtn{flex:0 0 auto!important;width:44px;padding:10px 0;font-size:17px}
+.icobtn.on{border-color:var(--brass);color:var(--brass2)}
+.preset-row{display:flex;gap:8px;margin-top:12px}
+.preset-row input{flex:1;background:var(--board2);border:1px solid var(--line);border-radius:9px;
+  color:var(--chalk);font:500 13px var(--sans);padding:9px 12px}
+.preset-row input:focus{outline:none;border-color:var(--brass)}
+.preset-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.preset-chip{display:inline-flex;align-items:center;gap:7px;background:var(--board2);
+  border:1px solid var(--line);border-radius:20px;padding:5px 8px 5px 13px;font:500 12px var(--sans);
+  color:var(--steel);cursor:pointer;transition:border-color .12s,color .12s}
+.preset-chip:hover{border-color:var(--brass);color:var(--chalk)}
+.preset-chip b{color:var(--brass2);font-weight:600}
+.preset-chip .x{color:var(--dim);font-size:14px;padding:0 2px;line-height:1}
+.preset-chip .x:hover{color:#c8452e}
+.soon{font:400 11.5px var(--sans);color:var(--dim);text-align:center;margin-top:16px;line-height:1.5;
+  padding-top:14px;border-top:1px solid var(--line)}
+
+/* json drawer under sheet */
+.jsonwrap{width:100%;max-width:720px;margin-top:22px;z-index:1}
+details{background:var(--felt);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+summary{cursor:pointer;padding:14px 18px;font:500 12px var(--mono);color:var(--steel);
+  letter-spacing:1px;list-style:none;display:flex;align-items:center;gap:11px;text-transform:uppercase}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";color:var(--brass);transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+pre{padding:4px 18px 18px;font:400 12.5px/1.7 var(--mono);color:#b9c6da;overflow-x:auto;
+  direction:ltr;text-align:left}
+
+.toast{position:fixed;bottom:28px;inset-inline-start:50%;transform:translateX(-50%);
+  background:var(--felt);border:1px solid var(--ok);color:var(--chalk);font:500 14px var(--sans);
+  padding:11px 22px;border-radius:11px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:99;
+  box-shadow:0 12px 30px rgba(0,0,0,.5)}
+[dir="rtl"] .toast{transform:translateX(50%)}
+.toast.show{opacity:1}
+.batchbar{position:fixed;bottom:0;inset-inline:0;background:linear-gradient(180deg,var(--felt),var(--board));
+  border-top:1px solid var(--brass);display:none;align-items:center;gap:13px;padding:13px 30px;z-index:60;
+  box-shadow:0 -10px 34px rgba(0,0,0,.5)}
+.batchbar.show{display:flex}
+.batchbar span{font:600 13.5px var(--sans);color:var(--chalk)}
+.viewtabs{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.vtab{background:var(--felt);border:1px solid var(--line);color:var(--steel);border-radius:7px;
+  padding:6px 16px;font:600 13px var(--mono);cursor:pointer}
+.vtab.on{background:var(--brass);border-color:var(--brass);color:#1a1206}
+.btn.mini{width:38px;height:34px;padding:0;font-size:15px}
+
+/* ---- light theme (board turns to a light workbench; paper stays paper) ---- */
+body.light{--board:#E8ECF2;--board2:#DDE3EC;--felt:#F1F4F9;--felt2:#E7ECF3;
+  --chalk:#1A2432;--steel:#556880;--line:#C6D0DE;--dim:#8493A6;
+  background-image:radial-gradient(circle,#d2dae6 1px,transparent 1px)!important;}
+body.light header{background:linear-gradient(180deg,#fff,#E8ECF2)!important}
+body.light .btn{background:#DEE4EE}
+body.light .part:hover,body.light .part.on,body.light .pop,body.light details,body.light pre{background:#E7ECF3}
+.batchbar .bcount{font:600 12px var(--mono);color:var(--brass2)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ═══════ Arabic typography layer — connected, dignified ═══════
+   Arabic breaks with letter-spacing and Latin display fonts.
+   These overrides give the RTL UI the same polish as English. */
+[dir="rtl"] .tag{font-family:var(--sans);letter-spacing:0;font-size:12.5px;font-weight:500}
+[dir="rtl"] .ledger-h{font-family:var(--sans);letter-spacing:0;font-size:13px;font-weight:700;text-transform:none}
+[dir="rtl"] .ledger-h b{font-family:var(--mono);font-size:11px}
+[dir="rtl"] .tray h2{font-family:var(--sans);font-weight:700;letter-spacing:0;font-size:20px}
+[dir="rtl"] .figcap{font-family:var(--sans);font-style:normal;font-size:14px;letter-spacing:0}
+[dir="rtl"] summary{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:13px;font-weight:600}
+[dir="rtl"] .pop h4{font-family:var(--sans);letter-spacing:0;text-transform:none;font-size:12.5px}
+[dir="rtl"] .dfmwarn{font-size:13px;line-height:1.7}
+[dir="rtl"] .field label{font-size:13px}
+[dir="rtl"] .preset-chip{font-size:12.5px}
+[dir="rtl"] .batchbar span{font-size:14px}
+.actions .btn{white-space:nowrap}
+[dir="rtl"] .part .pname{font-size:14.5px;font-weight:600}
+[dir="rtl"] .soon{font-size:12px}
+
+/* ═══════ Shop Tools drawer ═══════ */
+.tdscrim{position:fixed;inset:0;background:rgba(6,10,18,.55);backdrop-filter:blur(2px);
+ opacity:0;pointer-events:none;transition:opacity .2s;z-index:70}
+.tdscrim.open{opacity:1;pointer-events:auto}
+.tooldrawer{position:fixed;top:0;bottom:0;inset-inline-end:0;width:min(460px,94vw);z-index:71;
+ background:linear-gradient(180deg,var(--felt),var(--board));border-inline-start:1px solid var(--brass);
+ box-shadow:-20px 0 60px rgba(0,0,0,.5);transform:translateX(100%);transition:transform .25s cubic-bezier(.2,.7,.2,1);
+ display:flex;flex-direction:column}
+[dir="rtl"] .tooldrawer{transform:translateX(-100%)}
+.tooldrawer.open{transform:translateX(0)!important}
+.tooldrawer-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;
+ border-bottom:1px solid var(--line)}
+.tooldrawer-head b{font:700 17px var(--sans);color:var(--chalk)}
+.tooltabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ttab{font:600 12px var(--sans);color:var(--steel);background:var(--board2);border:1px solid var(--line);
+ border-radius:18px;padding:7px 13px;cursor:pointer;transition:.12s}
+.ttab:hover{border-color:var(--steel)}
+.ttab.on{border-color:var(--brass);color:var(--brass2);background:rgba(200,136,58,.08)}
+.toolbody{flex:1;overflow-y:auto;padding:18px 20px}
+.toolbody::-webkit-scrollbar{width:8px}.toolbody::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.tcard{background:var(--board2);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:14px}
+.tcard h4{font:700 14px var(--sans);color:var(--chalk);margin-bottom:10px}
+.trow{display:flex;gap:9px;margin-bottom:9px;flex-wrap:wrap}
+.trow>*{flex:1;min-width:90px}
+.tsel,.tin{background:var(--felt);border:1px solid var(--line);border-radius:8px;color:var(--chalk);
+ font:600 13.5px var(--mono);padding:8px 10px}
+.tsel{font-family:var(--sans);font-weight:600}
+.tin{direction:ltr;text-align:left}
+.tsel:focus,.tin:focus{outline:none;border-color:var(--brass)}
+.tres{background:linear-gradient(180deg,rgba(200,136,58,.10),rgba(200,136,58,.04));
+ border:1px solid rgba(200,136,58,.35);border-radius:10px;padding:11px 13px;
+ font:600 14px var(--mono);color:var(--brass2);line-height:1.7;direction:ltr;text-align:left}
+[dir="rtl"] .tres{direction:rtl;text-align:right}
+.tres .big{font-size:19px;color:var(--chalk)}
+.tres small{display:block;font:500 11.5px var(--sans);color:var(--steel);margin-top:4px;direction:inherit}
+.ttable{width:100%;border-collapse:collapse;font:500 12.5px var(--mono);color:var(--chalk);direction:ltr}
+.ttable th{font:600 11px var(--sans);color:var(--dim);text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+.ttable td{padding:5px 8px;border-bottom:1px solid rgba(36,51,74,.5)}
+.ttable tr:hover td{background:rgba(200,136,58,.05)}
+.tnote{font:500 11.5px var(--sans);color:var(--dim);margin-top:8px;line-height:1.55}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">
+    <span class="logo">Sanay<i>3</i>i</span>
+    <span class="tag" id="tagline">drafting studio</span>
+  </div>
+  <div class="grow"></div>
+  <div class="slot"><input id="q" placeholder="ابحث عن قطعة…"></div>
+  <button class="btn" id="toolsBtn">🧰 <span id="toolsBtnT">عدة الورشة</span></button>
+  <button class="btn primary" id="genBtn">توليد الأوامر</button>
+  <button class="btn gear" id="themeBtn" aria-label="theme" title="فاتح/غامق">◐</button>
+  <button class="btn gear" id="gearBtn" aria-label="settings">⚙</button>
+</header>
+
+<div class="tooldrawer" id="tooldrawer">
+ <div class="tooldrawer-head">
+   <b id="tdTitle">🧰 عدة الورشة</b>
+   <button class="btn gear" id="tdClose">✕</button>
+ </div>
+ <div class="tooltabs" id="tooltabs"></div>
+ <div class="toolbody" id="toolbody"></div>
+</div>
+<div class="tdscrim" id="tdscrim"></div>
+
+<div class="pop" id="pop">
+  <h4>اللغة / Language</h4>
+  <div class="langrow">
+    <button class="btn on" id="btnAr">العربية</button>
+    <button class="btn" id="btnEn">English</button>
+  </div>
+</div>
+
+<main>
+  <nav id="railwrap">
+    <div id="rail"></div>
+  </nav>
+
+  <section class="stage">
+    <div class="sheetwrap">
+        <button class="btn mini" id="printBtn" title="طباعة">🖨</button>
+        <button class="btn mini" id="shareBtn" title="مشاركة برابط">🔗</button>
+      </div>
+      <svg class="sheet" id="sheet" viewBox="0 0 760 540" xmlns="http://www.w3.org/2000/svg"></svg>
+      <p class="figcap" id="figcap"></p>
+    </div>
+    <div class="jsonwrap">
+      <details>
+        <summary id="jsonSum"></summary>
+        <pre id="jsonOut"></pre>
+      </details>
+    </div>
+  </section>
+
+  <aside class="tray">
+    <h2 id="partTitle"></h2>
+    <div class="sub" id="partSub"></div>
+    <div id="dfmWarn" class="dfmwarn" style="display:none"></div>
+    <div id="fields"></div>
+    <div class="actions" style="margin-bottom:0">
+      <button class="btn bridge" id="sendBtn">🔩 <span id="sendBtnTxt"></span></button>
+    </div>
+    <div class="bridgestatus" id="bridgeStatus"></div>
+    <div class="actions">
+      <button class="btn primary" id="dlBtn"></button>
+      <button class="btn" id="cpBtn"></button>
+      <button class="btn icobtn" id="favBtn" title="مفضّلة">☆</button>
+      <button class="btn icobtn" id="batchBtn" title="أضف لسلة التصدير">＋</button>
+    </div>
+    <div class="preset-row">
+      <input id="presetName" placeholder="احفظ المقاسات باسم…">
+      <button class="btn" id="saveBtn">حفظ</button>
+    </div>
+    <div id="presetList" class="preset-list"></div>
+    <p class="soon" id="bridgeNote"></p>
+  </aside>
+</main>
+
+<!-- ═══ Bridge: send-to-SolidWorks confirmation modal ═══ -->
+<div class="bmodal-wrap" id="bModal" style="display:none">
+  <div class="bmodal">
+    <h3 id="bmTitle"></h3>
+    <div class="bmodal-sub" id="bmSub"></div>
+    <div class="bmodal-cmds" id="bmCmds"></div>
+    <div class="bmodal-result" id="bmResult" style="display:none"></div>
+    <div class="bmodal-actions">
+      <button class="btn" id="bmCancel"></button>
+      <button class="btn bridge" id="bmConfirm"></button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="batchbar" id="batchbar">
+  <span id="batchCount">سلة التصدير: <b class="bcount">0</b></span>
+  <div style="flex:1"></div>
+  <button class="btn" id="batchClear">تفريغ</button>
+  <button class="btn primary" id="batchDl">تنزيل الكل</button>
+</div>
+
+<script>
+/* ============ i18n ============ */
+const I18N={
+ ar:{tagline:"استوديو الرسم الهندسي",gen:"توليد الأوامر",dl:"تنزيل الملف",cp:"نسخ",
+   copied:"تم النسخ ✓",saved:"تم التنزيل ✓",search:"ابحث عن قطعة…",
+   bridge:"زر 🔩 فوق بيرسل القطعة مباشرة للسوليدوركس عبر المحرّك المحلي",
+   fig:"الرسمة تتحدّث لحظياً مع كل مقاس",
+   jsonSum:"ملف الأوامر — swpilot run part.json",min:"الحد الأدنى",err:"قيمة غير صالحة",
+   groups:{lathe:"شغل المخرطة",mill:"صفائح وبراكيتات",mach:"عناصر آلات",fix:"قوالب وفحص",gears:"تروس ومنحنيات"},
+   tb:{title:"القطعة",scale:"المقياس",units:"الوحدات",by:"إعداد",date:"التاريخ",rev:"مراجعة"}},
+ en:{tagline:"engineering drafting studio",gen:"Generate commands",dl:"Download",cp:"Copy",
+   copied:"Copied ✓",saved:"Downloaded ✓",search:"Search parts…",
+   bridge:"The 🔩 button above sends the part straight to SolidWorks via the local engine",
+   fig:"the sheet redraws live as you type",
+   jsonSum:"COMMAND FILE — swpilot run part.json",min:"min",err:"invalid value",
+   groups:{lathe:"Lathe work",mill:"Plates & brackets",mach:"Machine elements",fix:"Fixtures & gauging",gears:"Gears & curves"},
+   tb:{title:"PART",scale:"SCALE",units:"UNITS",by:"DRAWN BY",date:"DATE",rev:"REV"}}
+};
+let lang="ar";
+
+/* ============ svg helpers ============ */
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,x){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(x!=null)e.textContent=x;return e;}
+function line(g,x1,y1,x2,y2,st,w){g.appendChild(el("line",{x1,y1,x2,y2,stroke:st||"var(--ink)","stroke-width":w||1.4}));}
+function thin(g,x1,y1,x2,y2){line(g,x1,y1,x2,y2,"var(--dim)",.8);}
+function rect(g,x,y,w,h){g.appendChild(el("rect",{x,y,width:w,height:h,fill:"none",stroke:"var(--ink)","stroke-width":1.6}));}
+function path(g,d,st,w){g.appendChild(el("path",{d,fill:"none",stroke:st||"var(--ink)","stroke-width":w||1.6}));}
+function circ(g,cx,cy,r,dash){g.appendChild(el("circle",{cx,cy,r,fill:"none",stroke:"var(--ink)","stroke-width":1.4,"stroke-dasharray":dash||"none"}));}
+function txt(g,x,y,s,size,fill,anchor){g.appendChild(el("text",{x,y,fill:fill||"var(--signal)","font-family":"IBM Plex Mono, IBM Plex Sans Arabic, monospace","font-size":size||12,"text-anchor":anchor||"middle"},s));}
+/* --- reusable SVG defs: ISO filled arrowheads, section hatch, sheet shadow --- */
+function svgDefs(){
+ const d=el("defs",{});
+ // filled arrowheads (closed, 15° ISO style) — one per direction, drawn AT the witness line
+ const heads={ar_r:"M0 0 L9 3 L9 -3 Z",ar_l:"M0 0 L-9 3 L-9 -3 Z",ar_u:"M0 0 L3 -9 L-3 -9 Z",ar_d:"M0 0 L3 9 L-3 9 Z"};
+ // 45° section hatch pattern (thin ink lines)
+ const pat=el("pattern",{id:"hatch45",width:7,height:7,patternUnits:"userSpaceOnUse",patternTransform:"rotate(45)"});
+ pat.appendChild(el("line",{x1:0,y1:0,x2:0,y2:7,stroke:"var(--inkblue)","stroke-width":.6,opacity:.55}));
+ d.appendChild(pat);
+ // soft paper shadow under the frame
+ const f=el("filter",{id:"paperShadow",x:"-4%",y:"-4%",width:"108%",height:"108%"});
+ f.appendChild(el("feDropShadow",{dx:0,dy:2,stdDeviation:3,"flood-color":"#000","flood-opacity":.12}));
+ d.appendChild(f);
+ return d;
+}
+// filled arrowhead at (x,y) pointing in direction dir (l/r/u/d)
+function ahead(g,x,y,dir){
+ const p={l:"M0 0 L9 3.2 L9 -3.2 Z",r:"M0 0 L-9 3.2 L-9 -3.2 Z",u:"M0 0 L3.2 9 L-3.2 9 Z",d:"M0 0 L3.2 -9 L-3.2 -9 Z"}[dir];
+ g.appendChild(el("path",{d:p,transform:`translate(${x} ${y})`,fill:"var(--inkblue)",stroke:"none"}));}
+function arrow(g,x,y,d){ahead(g,x,y,d);} // back-compat alias, now filled
+// witness (extension) line — thin, with small gap from the part
+function witness(g,x1,y1,x2,y2){line(g,x1,y1,x2,y2,"var(--inkblue)",.7);}
+function dimH(g,x1,x2,y,label){
+ witness(g,x1,y-5,x1,y+7);witness(g,x2,y-5,x2,y+7);
+ line(g,x1,y,x2,y,"var(--inkblue)",.9);ahead(g,x1,y,"l");ahead(g,x2,y,"r");
+ // pill behind label so the dim line doesn't cut the text
+ const cx=(x1+x2)/2;g.appendChild(el("rect",{x:cx-(String(label).length*3.5+3),y:y-14,width:String(label).length*7+6,height:12,fill:"var(--sheet)",stroke:"none",rx:2}));
+ txt(g,cx,y-5,label,11.5,"var(--inkblue)");}
+function dimV(g,y1,y2,x,label){
+ witness(g,x-7,y1,x+5,y1);witness(g,x-7,y2,x+5,y2);
+ line(g,x,y1,x,y2,"var(--inkblue)",.9);ahead(g,x,y1,"u");ahead(g,x,y2,"d");
+ const cy=(y1+y2)/2;g.appendChild(el("rect",{x:x+4,y:cy-7,width:String(label).length*7+5,height:13,fill:"var(--sheet)",stroke:"none",rx:2}));
+ g.appendChild(el("text",{x:x+7,y:cy+2.5,fill:"var(--inkblue)","font-family":"IBM Plex Mono, IBM Plex Sans Arabic, monospace","font-size":11.5,"text-anchor":"start"},label));}
+// radial / diameter dimension with leader out of a circle
+function radial(g,cx,cy,r,label,ang){
+ const a=(ang==null?-40:ang)*Math.PI/180,ex=cx+Math.cos(a)*r,ey=cy+Math.sin(a)*r;
+ const lx=cx+Math.cos(a)*(r+26),ly=cy+Math.sin(a)*(r+26);
+ line(g,ex,ey,lx,ly,"var(--inkblue)",.9);ahead(g,ex,ey,Math.cos(a)>0?"r":"l");
+ const tx=lx+(Math.cos(a)>0?4:-4);
+ g.appendChild(el("text",{x:tx,y:ly+3.5,fill:"var(--inkblue)","font-family":"IBM Plex Mono, IBM Plex Sans Arabic, monospace","font-size":11,"text-anchor":Math.cos(a)>0?"start":"end"},label));}
+// leader line from a point to a note (for callouts like chamfers/holes)
+function leader(g,px,py,tx,ty,label,anchor){
+ line(g,px,py,tx,ty,"var(--inkblue)",.8);ahead(g,px,py,tx>px?"l":"r");
+ g.appendChild(el("text",{x:tx+(anchor==="end"?-3:3),y:ty+3.5,fill:"var(--inkblue)","font-family":"IBM Plex Mono, IBM Plex Sans Arabic, monospace","font-size":10.5,"text-anchor":anchor||"start"},label));}
+// section hatch fill for a rectangular region (clipped visually to the shape via caller)
+function hatch(g,x,y,w,h){g.appendChild(el("rect",{x,y,width:w,height:h,fill:"url(#hatch45)",stroke:"none"}));}
+// heavier VISIBLE edge (object outline) — use for the main silhouette
+function edge(g,d){path(g,d,"var(--ink)",2);}
+function edgeRect(g,x,y,w,h){g.appendChild(el("rect",{x,y,width:w,height:h,fill:"none",stroke:"var(--ink)","stroke-width":2}));}
+// HIDDEN line (dashed, lighter) — for features behind the visible face
+function hidden(g,x1,y1,x2,y2){line(g,x1,y1,x2,y2,"var(--steel)",1);
+ g.lastChild.setAttribute("stroke-dasharray","5 3");}
+// small view label under a projection (e.g. FRONT / SIDE / SECTION A-A)
+function viewLabel(g,x,y,s){g.appendChild(el("text",{x,y,fill:"var(--paperdim)","font-family":"IBM Plex Mono, IBM Plex Sans Arabic, monospace","font-size":9.5,"letter-spacing":"1.5","text-anchor":"middle"},s));}
+function center(g,cx,cy,r){const e=r+9;
+ // ISO centerline: long-short-long dash
+ const cl=(x1,y1,x2,y2)=>{line(g,x1,y1,x2,y2,"var(--inkblue)",.7);g.lastChild.setAttribute("stroke-dasharray","10 3 2 3");g.lastChild.setAttribute("opacity",".7");};
+ cl(cx-e,cy,cx+e,cy);cl(cx,cy-e,cx,cy+e);}
+function axis(g,x1,x2,y){line(g,x1-12,y,x2+12,y,"var(--inkblue)",.7);g.lastChild.setAttribute("stroke-dasharray","10 3 2 3");g.lastChild.setAttribute("opacity",".7");}
+function slotH(g,cx,cy,len,r){path(g,`M${cx-len/2} ${cy-r} h${len} a${r} ${r} 0 0 1 0 ${2*r} h${-len} a${r} ${r} 0 0 1 0 ${-2*r} z`);}
+function fit(wm,hm,mw,mh){return Math.min(mw/wm,mh/hm);}
+const F=(k,ar,en,def,min)=>({k,ar,en,def,min:min??1});
+const dia=v=>"Ø"+v;
+
+/* ============ ISO frame + title block ============ */
+function frame(g,part){
+ // outer trim line (with soft paper shadow) + inner border
+ g.appendChild(el("rect",{x:14,y:14,width:732,height:512,fill:"none",stroke:"var(--line)","stroke-width":1,filter:"url(#paperShadow)"}));
+ g.appendChild(el("rect",{x:22,y:22,width:716,height:496,fill:"none",stroke:"var(--ink)","stroke-width":1.4}));
+ // zone grid ticks along the inner border (A–D rows, 1–6 cols)
+ "ABCD".split("").forEach((c,i)=>{const yy=90+i*120;txt(g,18,yy,c,10,"var(--dim)");txt(g,742,yy,c,10,"var(--dim)");
+   if(i>0){thin(g,22,yy-60,28,yy-60);thin(g,732,yy-60,738,yy-60);}});
+ [1,2,3,4,5,6].forEach((n,i)=>{const xx=80+i*120;txt(g,xx,19,n,10,"var(--dim)");txt(g,xx,534,n,10,"var(--dim)");
+   if(i>0){thin(g,xx-60,22,xx-60,28);thin(g,xx-60,510,xx-60,516);}});
+ const T=I18N[lang].tb,x=406,y=416,w=332,h=88;
+ // panel
+ g.appendChild(el("rect",{x,y,width:w,height:h,fill:"rgba(37,80,116,0.045)",stroke:"var(--ink)","stroke-width":1.4}));
+ // row + column rules
+ const th=(a,b,c,d)=>thin(g,a,b,c,d);
+ th(x,y+22,x+w,y+22);            // under title row
+ th(x,y+46,x+w,y+46);            // under name row
+ th(x,y+67,x+w,y+67);            // under spec row
+ th(x+168,y,x+168,y+22);         // title | rev split
+ th(x+112,y+46,x+112,y+67);      // scale | units
+ th(x+220,y+46,x+220,y+67);      // units | proj
+ th(x+112,y+67,x+112,y+h);       // by | date
+ th(x+232,y+67,x+232,y+h);       // date | code
+ // title row
+ txt(g,x+8,y+15,T.title+": "+part.name[lang],11,"var(--ink)","start");
+ txt(g,x+176,y+15,T.rev+" A",10,"var(--steel)","start");
+ // spec row: material / finish / tolerance
+ txt(g,x+8,y+34,(lang==="ar"?"الخامة: ":"MAT: ")+(part.mat||(lang==="ar"?"فولاذ C45":"Steel C45")),9.5,"var(--steel)","start");
+ txt(g,x+120,y+34,(lang==="ar"?"التشطيب: Ra 3.2":"FINISH: Ra 3.2"),9.5,"var(--steel)","start");
+ txt(g,x+240,y+34,(lang==="ar"?"سماح ±0.1":"TOL ±0.1"),9.5,"var(--steel)","start");
+ // scale / units / third-angle projection symbol
+ txt(g,x+8,y+60,T.scale+" 1:1",10,"var(--steel)","start");
+ txt(g,x+120,y+60,T.units+": mm",10,"var(--steel)","start");
+ projSymbol(g,x+284,y+56);
+ // by / date / code
+ txt(g,x+8,y+79,T.by,9,"var(--dim)","start");
+ txt(g,x+8,y+87,"Sanay3i",10,"var(--brass)","start");
+ g.lastChild.setAttribute("font-weight","600");
+ txt(g,x+58,y+87,"/ Eng. Osama",9.5,"var(--steel)","start");
+ txt(g,x+120,y+79,T.date,9,"var(--dim)","start");
+ txt(g,x+120,y+87,new Date().toISOString().slice(0,10),9.5,"var(--steel)","start");
+ txt(g,x+240,y+79,lang==="ar"?"الرمز":"CODE",9,"var(--dim)","start");
+ txt(g,x+240,y+87,part.code,11,"var(--ink)","start");
+ g.lastChild.setAttribute("font-weight","600");
+ // code tab above panel
+ txt(g,x+8,y-8,part.code+"  ·  "+part.name.en,10,"var(--dim)","start");
+}
+// ISO third-angle projection symbol (truncated cone: circle + trapezoid)
+function projSymbol(g,cx,cy){
+ const r=6.5;
+ circ(g,cx-9,cy,r);circ(g,cx-9,cy,r*0.55);
+ // trapezoid (side view of cone)
+ path(g,`M${cx+3} ${cy-r} L${cx+16} ${cy-r*0.55} L${cx+16} ${cy+r*0.55} L${cx+3} ${cy+r} Z`,"var(--ink)",1.1);
+ line(g,cx-9,cy-r-3,cx-9,cy+r+3,"var(--inkblue)",.6);g.lastChild.setAttribute("stroke-dasharray","3 2");
+}
+
+/* ============ CATALOG ============ */
+const PARTS=[
+
+/* ═══════════ LATHE — شغل المخرطة (12) ═══════════ */
+{id:"bushing",code:"L-01",grp:"lathe",
+ name:{ar:"جلبة",en:"Bushing"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="4.5"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",30,2),F("ID","القطر الداخلي ID","Inner dia ID",16),F("H","الارتفاع H","Height H",25)],
+ draw(g,p){const s=fit(p.OD*2.6,p.H,340,300),R=p.OD*s/2,cx=210,cy=210;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.ID*s/2);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+34,dia(p.OD));txt(g,cx,cy+4,dia(p.ID),12);
+  const sx=cx+R+80,h=p.H*s;rect(g,sx,cy-h/2,2*R,h);
+  thin(g,sx+R-p.ID*s/2,cy-h/2,sx+R-p.ID*s/2,cy+h/2);thin(g,sx+R+p.ID*s/2,cy-h/2,sx+R+p.ID*s/2,cy+h/2);
+  dimV(g,cy-h/2,cy+h/2,sx+2*R+36,p.H);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.H,name:"body"},
+  {op:"hole",diameter:p.ID,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"bushing.SLDPRT"}]};}},
+
+{id:"collar",code:"L-02",grp:"lathe",
+ name:{ar:"طوق ببرغي تثبيت",en:"Set-screw collar"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="5"/><line x1="14" y1="4" x2="14" y2="8"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",36,4),F("ID","قطر العمود ID","Bore ID",20),F("W","العرض W","Width W",14),F("sd","قطر برغي التثبيت","Set screw dia",5,2)],
+ draw(g,p){const s=fit(p.OD*2.6,p.OD,340,300),R=p.OD*s/2,cx=210,cy=205;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.ID*s/2);center(g,cx,cy,R);
+  line(g,cx,cy-R,cx,cy-p.ID*s/2);txt(g,cx+14,cy-R+16,"M"+p.sd,11,"var(--signal)","start");
+  dimH(g,cx-R,cx+R,cy+R+34,dia(p.OD));txt(g,cx,cy+4,dia(p.ID),12);
+  const sx=cx+R+80,w=p.W*s;rect(g,sx,cy-R,w,2*R);
+  thin(g,sx,cy-p.ID*s/2,sx+w,cy-p.ID*s/2);thin(g,sx,cy+p.ID*s/2,sx+w,cy+p.ID*s/2);
+  rect(g,sx+w/2-p.sd*s/2,cy-R,p.sd*s,R-p.ID*s/2);
+  dimH(g,sx,sx+w,cy+R+34,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.W,name:"body"},
+  {op:"hole",diameter:p.ID,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"create_plane",offset_from:"right",distance:p.OD/2,name:"tangent"},
+  {op:"create_sketch",on:{plane:"tangent"},name:"ss"},
+  {op:"draw_circle",sketch:"ss",diameter:p.sd,at:{u:0,v:p.W/2}},
+  {op:"cut",sketch:"ss",depth:(p.OD-p.ID)/2,name:"setscrew"},
+  {op:"save_part",path:"collar.SLDPRT"}]};}},
+
+{id:"washer",code:"L-03",grp:"lathe",
+ name:{ar:"وردة سميكة",en:"Thick washer"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="3.5"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",40,3),F("ID","القطر الداخلي ID","Inner dia ID",13),F("T","السماكة T","Thickness T",5)],
+ draw(g,p){const s=fit(p.OD*2.4,p.OD,340,300),R=p.OD*s/2,cx=220,cy=205;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.ID*s/2);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+34,dia(p.OD));txt(g,cx,cy+4,dia(p.ID),12);
+  const sx=cx+R+80,t=Math.max(p.T*s,8);rect(g,sx,cy-R,t,2*R);dimH(g,sx,sx+t,cy+R+34,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.T,name:"body"},
+  {op:"hole",diameter:p.ID,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"washer.SLDPRT"}]};}},
+
+{id:"shaft2",code:"L-04",grp:"lathe",
+ name:{ar:"عمود مدرّج (درجتان)",en:"Stepped shaft (2)"},
+ icon:'<rect x="3" y="10" width="12" height="7"/><rect x="15" y="8" width="10" height="11"/>',
+ params:[F("D1","قطر الدرجة 1","Step 1 dia",20),F("L1","طول الدرجة 1","Step 1 len",60),F("D2","قطر الدرجة 2","Step 2 dia",30),F("L2","طول الدرجة 2","Step 2 len",40)],
+ draw(g,p){const s=fit(p.L1+p.L2,Math.max(p.D1,p.D2),380,170),x=160,cy=205;
+  const l1=p.L1*s,l2=p.L2*s,d1=p.D1*s,d2=p.D2*s;
+  rect(g,x,cy-d1/2,l1,d1);rect(g,x+l1,cy-d2/2,l2,d2);axis(g,x,x+l1+l2,cy);
+  dimH(g,x,x+l1,cy+Math.max(d1,d2)/2+30,p.L1);dimH(g,x+l1,x+l1+l2,cy+Math.max(d1,d2)/2+30,p.L2);
+  dimV(g,cy-d1/2,cy+d1/2,x-36,dia(p.D1));dimV(g,cy-d2/2,cy+d2/2,x+l1+l2+36,dia(p.D2));},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D1,height:p.L1,name:"step1"},
+  {op:"create_sketch",on:{face:{of_feature:"step1",facing:"+z"}},name:"s2"},
+  {op:"draw_circle",sketch:"s2",diameter:p.D2,at:"center"},
+  {op:"extrude",sketch:"s2",depth:p.L2,name:"step2"},
+  {op:"save_part",path:"stepped_shaft.SLDPRT"}]};}},
+
+{id:"shaft3k",code:"L-05",grp:"lathe",
+ name:{ar:"عمود 3 درجات + خابور",en:"3-step shaft + keyway"},
+ icon:'<rect x="2" y="11" width="8" height="5"/><rect x="10" y="8" width="10" height="11"/><rect x="20" y="10" width="6" height="7"/><line x1="13" y1="8" x2="17" y2="8"/>',
+ params:[F("D1","قطر 1","Dia 1",16),F("L1","طول 1","Len 1",35),F("D2","قطر 2","Dia 2",28),F("L2","طول 2","Len 2",55),F("D3","قطر 3","Dia 3",20),F("L3","طول 3","Len 3",30),F("kw","عرض الخابور","Key width",8,2),F("kd","عمق الخابور","Key depth",4)],
+ draw(g,p){const L=p.L1+p.L2+p.L3,s=fit(L,Math.max(p.D1,p.D2,p.D3),400,150),x=140,cy=200;
+  const l1=p.L1*s,l2=p.L2*s,l3=p.L3*s,d1=p.D1*s,d2=p.D2*s,d3=p.D3*s;
+  rect(g,x,cy-d1/2,l1,d1);rect(g,x+l1,cy-d2/2,l2,d2);rect(g,x+l1+l2,cy-d3/2,l3,d3);
+  axis(g,x,x+l1+l2+l3,cy);
+  const kl=l2*0.7,kx=x+l1+l2*0.15,kdp=p.kd*s;
+  rect(g,kx,cy-d2/2,kl,kdp);txt(g,kx+kl/2,cy-d2/2-8,p.kw+"×"+p.kd+" key",11);
+  dimH(g,x,x+l1,cy+d2/2+30,p.L1);dimH(g,x+l1,x+l1+l2,cy+d2/2+30,p.L2);dimH(g,x+l1+l2,x+l1+l2+l3,cy+d2/2+30,p.L3);
+  dimV(g,cy-d1/2,cy+d1/2,x-34,dia(p.D1));dimV(g,cy-d2/2,cy+d2/2,x+l1+l2/2-0.0001+l2/2+l3+36,dia(p.D3));
+  txt(g,x+l1+l2/2,cy+d2/2+52,dia(p.D2),12);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D1,height:p.L1,name:"s1"},
+  {op:"create_sketch",on:{face:{of_feature:"s1",facing:"+z"}},name:"k2"},
+  {op:"draw_circle",sketch:"k2",diameter:p.D2,at:"center"},
+  {op:"extrude",sketch:"k2",depth:p.L2,name:"s2"},
+  {op:"create_sketch",on:{face:{of_feature:"s2",facing:"+z"}},name:"k3"},
+  {op:"draw_circle",sketch:"k3",diameter:p.D3,at:"center"},
+  {op:"extrude",sketch:"k3",depth:p.L3,name:"s3"},
+  {op:"create_plane",offset_from:"top",distance:p.D2/2-p.kd,name:"keyplane"},
+  {op:"create_sketch",on:{plane:"keyplane"},name:"ks"},
+  {op:"draw_rectangle",sketch:"ks",width:p.L2*0.7,height:p.kw,at:{u:p.L1+p.L2*0.15,v:-p.kw/2}},
+  {op:"cut",sketch:"ks",depth:p.kd,name:"keyway"},
+  {op:"save_part",path:"shaft3_keyway.SLDPRT"}]};}},
+
+{id:"pin",code:"L-06",grp:"lathe",
+ name:{ar:"مسمار مدرّج بشطفة",en:"Stepped pin, chamfered"},
+ icon:'<rect x="4" y="11" width="10" height="5"/><rect x="14" y="9" width="9" height="9"/><line x1="23" y1="10" x2="24.5" y2="11.5"/>',
+ params:[F("d1","القطر الصغير d1","Small dia d1",8,2),F("l1","الطول الصغير l1","Small len l1",25),F("d2","القطر الكبير d2","Large dia d2",12),F("l2","الطول الكبير l2","Large len l2",15),F("c","الشطفة c","Chamfer c",1,0.2)],
+ draw(g,p){const s=fit(p.l1+p.l2,p.d2,340,120),x=190,cy=200;
+  const l1=p.l1*s,l2=p.l2*s,d1=p.d1*s,d2=p.d2*s,c=Math.min(p.c*s,d1/2-1);
+  // single clean outline: chamfered small end → shank → step → big end
+  path(g,`M${x+c} ${cy-d1/2} h${l1-c} v${-(d2-d1)/2} h${l2} v${d2} h${-l2} v${-(d2-d1)/2} h${-(l1-c)} l${-c} ${-c} v${-(d1-2*c)} z`,"var(--ink)");
+  axis(g,x,x+l1+l2,cy);
+  dimH(g,x,x+l1,cy+d2/2+30,p.l1);dimH(g,x+l1,x+l1+l2,cy+d2/2+30,p.l2);
+  dimV(g,cy-d1/2,cy+d1/2,x-34,dia(p.d1));dimV(g,cy-d2/2,cy+d2/2,x+l1+l2+36,dia(p.d2));
+  txt(g,x+c+8,cy-d1/2-10,"C"+p.c,11);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.d2,height:p.l2,name:"head"},
+  {op:"create_sketch",on:{face:{of_feature:"head",facing:"+z"}},name:"ps"},
+  {op:"draw_circle",sketch:"ps",diameter:p.d1,at:"center"},
+  {op:"extrude",sketch:"ps",depth:p.l1,name:"shank"},
+  {op:"chamfer",distance:p.c,edges:{select:"top_loop",of_feature:"shank"}},
+  {op:"save_part",path:"stepped_pin.SLDPRT"}]};}},
+
+{id:"flange",code:"L-07",grp:"lathe",
+ name:{ar:"فلنجة بدائرة براغي",en:"Flange, bolt circle"},
+ icon:'<circle cx="14" cy="13" r="10"/><circle cx="14" cy="13" r="4"/><circle cx="14" cy="5.5" r="1.3"/><circle cx="21.5" cy="13" r="1.3"/><circle cx="14" cy="20.5" r="1.3"/><circle cx="6.5" cy="13" r="1.3"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",120,6),F("ID","قطر الفتحة ID","Bore ID",40),F("T","السماكة T","Thickness T",12),F("BCD","دائرة البراغي BCD","Bolt circle BCD",90),F("N","عدد البراغي N","Bolt count N",6,2),F("bd","قطر البرغي bd","Bolt hole bd",9,2)],
+ draw(g,p){const s=fit(p.OD*1.7,p.OD,420,330),R=p.OD*s/2,cx=250,cy=210;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.ID*s/2);circ(g,cx,cy,p.BCD*s/2,"6 5");center(g,cx,cy,R);
+  for(let i=0;i<p.N;i++){const a=i*2*Math.PI/p.N-Math.PI/2;
+   circ(g,cx+Math.cos(a)*p.BCD*s/2,cy+Math.sin(a)*p.BCD*s/2,p.bd*s/2);}
+  dimH(g,cx-R,cx+R,cy+R+36,dia(p.OD));
+  txt(g,cx,cy-p.BCD*s/2-12,p.N+"× "+dia(p.bd)+" on "+dia(p.BCD)+" BCD",11);
+  txt(g,cx,cy+5,dia(p.ID),12);
+  const sx=cx+R+66,t=Math.max(p.T*s,9);rect(g,sx,cy-R,t,2*R);dimH(g,sx,sx+t,cy+R+36,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.T,name:"body"},
+  {op:"hole",diameter:p.ID,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"hole",diameter:p.bd,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:{r:p.BCD/2,theta_deg:0},name:"seed"},
+  {op:"circular_pattern",of_feature:"seed",count:p.N,equal_spacing:true},
+  {op:"save_part",path:"flange.SLDPRT"}]};}},
+
+{id:"blind",code:"L-08",grp:"lathe",
+ name:{ar:"فلنجة عمياء",en:"Blind flange"},
+ icon:'<circle cx="14" cy="13" r="10"/><circle cx="14" cy="6" r="1.3"/><circle cx="21" cy="16.5" r="1.3"/><circle cx="7" cy="16.5" r="1.3"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",110,6),F("T","السماكة T","Thickness T",14),F("BCD","دائرة البراغي BCD","Bolt circle BCD",85),F("N","عدد البراغي N","Bolt count N",4,2),F("bd","قطر البرغي bd","Bolt hole bd",9,2)],
+ draw(g,p){const s=fit(p.OD*1.7,p.OD,420,330),R=p.OD*s/2,cx=250,cy=210;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.BCD*s/2,"6 5");center(g,cx,cy,R);
+  for(let i=0;i<p.N;i++){const a=i*2*Math.PI/p.N-Math.PI/2;
+   circ(g,cx+Math.cos(a)*p.BCD*s/2,cy+Math.sin(a)*p.BCD*s/2,p.bd*s/2);}
+  dimH(g,cx-R,cx+R,cy+R+36,dia(p.OD));
+  txt(g,cx,cy-p.BCD*s/2-12,p.N+"× "+dia(p.bd)+" on "+dia(p.BCD),11);
+  const sx=cx+R+66,t=Math.max(p.T*s,9);rect(g,sx,cy-R,t,2*R);dimH(g,sx,sx+t,cy+R+36,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.T,name:"body"},
+  {op:"hole",diameter:p.bd,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:{r:p.BCD/2,theta_deg:0},name:"seed"},
+  {op:"circular_pattern",of_feature:"seed",count:p.N,equal_spacing:true},
+  {op:"save_part",path:"blind_flange.SLDPRT"}]};}},
+
+{id:"pulley",code:"L-09",grp:"lathe",
+ name:{ar:"بكرة مسطحة بصُرّة",en:"Flat pulley with hub"},
+ icon:'<circle cx="14" cy="13" r="10"/><circle cx="14" cy="13" r="5.5"/><circle cx="14" cy="13" r="2.5"/>',
+ params:[F("OD","قطر البكرة OD","Pulley dia OD",90,6),F("W","عرض البكرة W","Face width W",22),F("hd","قطر الصُرّة hd","Hub dia hd",40),F("hw","طول الصُرّة hw","Hub length hw",16),F("b","قطر التجويف b","Bore b",16)],
+ draw(g,p){const s=fit(p.OD*1.8,p.OD,420,320),R=p.OD*s/2,cx=235,cy=205;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.hd*s/2);circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+36,dia(p.OD));txt(g,cx,cy+4,dia(p.b),11);
+  txt(g,cx,cy-p.hd*s/2-8,dia(p.hd)+" hub",11);
+  const sx=cx+R+64,w=p.W*s,hw=p.hw*s,hR=p.hd*s/2,bR=p.b*s/2;
+  path(g,`M${sx} ${cy-R} h${w} v${R-hR} h${hw} v${2*hR} h${-hw} v${R-hR} h${-w} z`);
+  thin(g,sx,cy-bR,sx+w+hw,cy-bR);thin(g,sx,cy+bR,sx+w+hw,cy+bR);axis(g,sx,sx+w+hw,cy);
+  dimH(g,sx,sx+w,cy+R+36,p.W);dimH(g,sx+w,sx+w+hw,cy+R+36,p.hw);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.W,name:"face"},
+  {op:"create_sketch",on:{face:{of_feature:"face",facing:"+z"}},name:"hs"},
+  {op:"draw_circle",sketch:"hs",diameter:p.hd,at:"center"},
+  {op:"extrude",sketch:"hs",depth:p.hw,name:"hub"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"hub",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"pulley_hub.SLDPRT"}]};}},
+
+{id:"steppulley",code:"L-10",grp:"lathe",
+ name:{ar:"بكرة درجتين",en:"Two-step pulley"},
+ icon:'<circle cx="14" cy="13" r="10"/><circle cx="14" cy="13" r="6.5"/><circle cx="14" cy="13" r="2.2"/>',
+ params:[F("D1","قطر الدرجة 1","Step 1 dia",100,6),F("W1","عرض 1","Width 1",18),F("D2","قطر الدرجة 2","Step 2 dia",70),F("W2","عرض 2","Width 2",18),F("b","قطر التجويف b","Bore b",15)],
+ draw(g,p){const s=fit(p.D1*1.8,p.D1,420,320),R1=p.D1*s/2,R2=p.D2*s/2,cx=230,cy=205;
+  circ(g,cx,cy,R1);circ(g,cx,cy,R2);circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R1);
+  dimH(g,cx-R1,cx+R1,cy+R1+36,dia(p.D1));txt(g,cx,cy-R2-8,dia(p.D2),11);txt(g,cx,cy+4,dia(p.b),11);
+  const sx=cx+R1+64,w1=p.W1*s,w2=p.W2*s,bR=p.b*s/2;
+  path(g,`M${sx} ${cy-R1} h${w1} v${R1-R2} h${w2} v${2*R2} h${-w2} v${R1-R2} h${-w1} z`);
+  thin(g,sx,cy-bR,sx+w1+w2,cy-bR);thin(g,sx,cy+bR,sx+w1+w2,cy+bR);axis(g,sx,sx+w1+w2,cy);
+  dimH(g,sx,sx+w1,cy+R1+36,p.W1);dimH(g,sx+w1,sx+w1+w2,cy+R1+36,p.W2);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D1,height:p.W1,name:"g1"},
+  {op:"create_sketch",on:{face:{of_feature:"g1",facing:"+z"}},name:"g2s"},
+  {op:"draw_circle",sketch:"g2s",diameter:p.D2,at:"center"},
+  {op:"extrude",sketch:"g2s",depth:p.W2,name:"g2"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"g2",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"step_pulley.SLDPRT"}]};}},
+
+{id:"coupling",code:"L-11",grp:"lathe",
+ name:{ar:"نصف قارنة (كوبلينج)",en:"Half coupling"},
+ icon:'<circle cx="14" cy="13" r="10"/><circle cx="14" cy="13" r="3"/><circle cx="14" cy="6.5" r="1.2"/><circle cx="20.5" cy="16" r="1.2"/><circle cx="7.5" cy="16" r="1.2"/>',
+ params:[F("OD","قطر الفلنجة OD","Flange dia OD",100,6),F("T","سماكة الفلنجة T","Flange thk T",12),F("hd","قطر الصُرّة hd","Hub dia hd",45),F("hw","طول الصُرّة hw","Hub len hw",30),F("b","قطر التجويف b","Bore b",22),F("BCD","دائرة البراغي","Bolt circle BCD",75),F("N","عدد البراغي N","Bolts N",4,2),F("bd","قطر البراغي bd","Bolt dia bd",9,2)],
+ draw(g,p){const s=fit(p.OD*1.8,p.OD,420,320),R=p.OD*s/2,cx=230,cy=205;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.hd*s/2);circ(g,cx,cy,p.b*s/2);circ(g,cx,cy,p.BCD*s/2,"6 5");center(g,cx,cy,R);
+  for(let i=0;i<p.N;i++){const a=i*2*Math.PI/p.N-Math.PI/2;
+   circ(g,cx+Math.cos(a)*p.BCD*s/2,cy+Math.sin(a)*p.BCD*s/2,p.bd*s/2);}
+  dimH(g,cx-R,cx+R,cy+R+36,dia(p.OD));txt(g,cx,cy+4,dia(p.b),10);
+  txt(g,cx,cy-p.BCD*s/2-11,p.N+"× "+dia(p.bd),10);
+  const sx=cx+R+64,t=p.T*s,hw=p.hw*s,hR=p.hd*s/2,bR=p.b*s/2;
+  path(g,`M${sx} ${cy-R} h${t} v${R-hR} h${hw} v${2*hR} h${-hw} v${R-hR} h${-t} z`);
+  thin(g,sx,cy-bR,sx+t+hw,cy-bR);thin(g,sx,cy+bR,sx+t+hw,cy+bR);axis(g,sx,sx+t+hw,cy);
+  dimH(g,sx,sx+t,cy+R+36,p.T);dimH(g,sx+t,sx+t+hw,cy+R+36,p.hw);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.T,name:"flange"},
+  {op:"create_sketch",on:{face:{of_feature:"flange",facing:"+z"}},name:"hs"},
+  {op:"draw_circle",sketch:"hs",diameter:p.hd,at:"center"},
+  {op:"extrude",sketch:"hs",depth:p.hw,name:"hub"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"hub",facing:"+z"}},at:"center"},
+  {op:"hole",diameter:p.bd,through:true,on:{face:{of_feature:"flange",facing:"-z"}},at:{r:p.BCD/2,theta_deg:0},name:"seed"},
+  {op:"circular_pattern",of_feature:"seed",count:p.N,equal_spacing:true},
+  {op:"save_part",path:"half_coupling.SLDPRT"}]};}},
+
+{id:"sleeve",code:"L-12",grp:"lathe",
+ name:{ar:"جلبة بكتف",en:"Shoulder sleeve"},
+ icon:'<rect x="5" y="9" width="8" height="9"/><rect x="13" y="6" width="9" height="15"/><circle cx="13.5" cy="13.5" r="2.2"/>',
+ params:[F("D1","قطر الجسم D1","Body dia D1",28,3),F("L1","طول الجسم L1","Body len L1",30),F("D2","قطر الكتف D2","Shoulder dia D2",38),F("L2","سماكة الكتف L2","Shoulder thk L2",6),F("ID","القطر الداخلي ID","Inner dia ID",18)],
+ draw(g,p){const s=fit(p.L1+p.L2,p.D2,320,150),x=185,cy=200;
+  const l1=p.L1*s,l2=p.L2*s,d1=p.D1*s,d2=p.D2*s,ir=p.ID*s/2;
+  rect(g,x,cy-d1/2,l1,d1);rect(g,x+l1,cy-d2/2,l2,d2);
+  thin(g,x,cy-ir,x+l1+l2,cy-ir);thin(g,x,cy+ir,x+l1+l2,cy+ir);axis(g,x,x+l1+l2,cy);
+  dimH(g,x,x+l1,cy+d2/2+30,p.L1);dimH(g,x+l1,x+l1+l2,cy+d2/2+30,p.L2);
+  dimV(g,cy-d1/2,cy+d1/2,x-34,dia(p.D1));dimV(g,cy-d2/2,cy+d2/2,x+l1+l2+36,dia(p.D2));
+  txt(g,x+l1/2,cy+4,dia(p.ID),11);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D1,height:p.L1,name:"body"},
+  {op:"create_sketch",on:{face:{of_feature:"body",facing:"+z"}},name:"sh"},
+  {op:"draw_circle",sketch:"sh",diameter:p.D2,at:"center"},
+  {op:"extrude",sketch:"sh",depth:p.L2,name:"shoulder"},
+  {op:"hole",diameter:p.ID,through:true,on:{face:{of_feature:"shoulder",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"shoulder_sleeve.SLDPRT"}]};}},
+];
+/* mill/mach/fix families are appended in PART 2 of this build */
+window.__PARTS=PARTS;
+</script>
+<script id="part2src">
+const MORE=[
+/* ═══════════ MILL — صفائح وبراكيتات (10) ═══════════ */
+{id:"plate",code:"M-01",grp:"mill",
+ name:{ar:"لوحة تثبيت بثقوب زوايا",en:"Mounting plate, corner holes"},
+ icon:'<rect x="3" y="6" width="22" height="14" rx="1"/><circle cx="8" cy="10" r="1.6"/><circle cx="20" cy="10" r="1.6"/><circle cx="8" cy="16" r="1.6"/><circle cx="20" cy="16" r="1.6"/>',
+ params:[F("L","الطول L","Length L",120),F("W","العرض W","Width W",80),F("T","السماكة T","Thickness T",10),F("d","قطر الثقب d","Hole dia d",8),F("m","إزاحة من الحافة","Edge margin",12,3)],
+ draw(g,p){const s=fit(p.L,p.W,320,190),w=p.L*s,h=p.W*s,x=120,y=100,m=p.m*s,r=p.d*s/2;
+  rect(g,x,y,w,h);
+  [[x+m,y+m],[x+w-m,y+m],[x+m,y+h-m],[x+w-m,y+h-m]].forEach(([cx,cy])=>{circ(g,cx,cy,r);center(g,cx,cy,r);});
+  dimH(g,x,x+w,y+h+32,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  dimH(g,x,x+m,y-20,p.m);txt(g,x+w-64,y-22,"4× "+dia(p.d),12);
+  const sy=y+h+64;rect(g,x,sy,w,Math.max(p.T*s,9));dimV(g,sy,sy+Math.max(p.T*s,9),x+w+40,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"plate"},
+  {op:"add_corner_holes",diameter:p.d,margin:p.m,of_feature:"plate"},
+  {op:"save_part",path:"mounting_plate.SLDPRT"}]};}},
+
+{id:"gridplate",code:"M-02",grp:"mill",
+ name:{ar:"لوحة شبكة ثقوب n×m",en:"Grid-holes plate n×m"},
+ icon:'<rect x="3" y="5" width="22" height="16" rx="1"/><circle cx="8" cy="10" r="1.2"/><circle cx="14" cy="10" r="1.2"/><circle cx="20" cy="10" r="1.2"/><circle cx="8" cy="16" r="1.2"/><circle cx="14" cy="16" r="1.2"/><circle cx="20" cy="16" r="1.2"/>',
+ params:[F("L","الطول L","Length L",160),F("W","العرض W","Width W",100),F("T","السماكة T","Thickness T",8),F("d","قطر الثقب d","Hole dia d",6),F("nx","عدد أعمدة nx","Cols nx",4,2),F("ny","عدد صفوف ny","Rows ny",3,2),F("m","إزاحة من الحافة","Edge margin",15,3)],
+ draw(g,p){const s=fit(p.L,p.W,330,190),w=p.L*s,h=p.W*s,x=115,y=105,m=p.m*s,r=p.d*s/2;
+  rect(g,x,y,w,h);
+  const dx=(w-2*m)/(p.nx-1),dy=(h-2*m)/(p.ny-1);
+  for(let i=0;i<p.nx;i++)for(let j=0;j<p.ny;j++)circ(g,x+m+i*dx,y+m+j*dy,r);
+  center(g,x+m,y+m,r);
+  dimH(g,x,x+w,y+h+32,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  dimH(g,x+m,x+m+dx,y-20,((p.L-2*p.m)/(p.nx-1)).toFixed(1));
+  txt(g,x+w-90,y-22,p.nx+"×"+p.ny+" — "+dia(p.d),12);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"plate"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"plate",facing:"+z"}},at:{u:p.m,v:p.m},name:"seed"},
+  {op:"linear_pattern",of_feature:"seed",nx:p.nx,dx:(p.L-2*p.m)/(p.nx-1),ny:p.ny,dy:(p.W-2*p.m)/(p.ny-1)},
+  {op:"save_part",path:"grid_plate.SLDPRT"}]};}},
+
+{id:"lbracket",code:"M-03",grp:"mill",
+ name:{ar:"زاوية تثبيت L",en:"L-Bracket"},
+ icon:'<path d="M5 4 v18 h18 v-6 h-12 v-12 z"/><circle cx="9" cy="9" r="1.6"/><circle cx="17" cy="19" r="1.6"/>',
+ params:[F("A","الضلع القائم A","Leg A",80),F("B","الضلع القاعدي B","Leg B",100),F("W","العرض W","Width W",50),F("T","السماكة T","Thickness T",8),F("d","قطر الثقوب d","Hole dia d",8)],
+ draw(g,p){const s=fit(Math.max(p.A,p.B)*1.9,Math.max(p.A,p.B),380,270),a=p.A*s,b=p.B*s,t=p.T*s,x=140,y=95,r=p.d*s/2;
+  path(g,`M${x} ${y} h${t} v${a-t} h${b-t} v${t} h${-b} z`);
+  circ(g,x+t/2,y+a*0.3,r);center(g,x+t/2,y+a*0.3,r);
+  circ(g,x+b*0.65,y+a-t/2,r);center(g,x+b*0.65,y+a-t/2,r);
+  dimV(g,y,y+a,x-34,p.A);dimH(g,x,x+b,y+a+32,p.B);
+  dimH(g,x,x+t,y-18,p.T);txt(g,x+b-26,y+a-t-14,"2× "+dia(p.d),12);
+  const sx=x+b+80;rect(g,sx,y,p.W*s,a);dimH(g,sx,sx+p.W*s,y+a+32,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.B,height:p.W,thickness:p.T,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"ls"},
+  {op:"draw_rectangle",sketch:"ls",width:p.T,height:p.W,at:{u:0,v:0}},
+  {op:"extrude",sketch:"ls",depth:p.A-p.T,name:"leg"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"leg",facing:"+x"}},at:{u:p.A*0.3,v:p.W/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"base",facing:"+z"}},at:{u:p.B*0.65,v:p.W/2}},
+  {op:"save_part",path:"l_bracket.SLDPRT"}]};}},
+
+{id:"ubracket",code:"M-04",grp:"mill",
+ name:{ar:"حامل U",en:"U-Bracket"},
+ icon:'<path d="M6 5 v16 h16 v-16 M6 21 h16" transform="translate(0,0)"/><path d="M6 5 h4 v11 h8 v-11 h4 v16 h-16 z"/><circle cx="8" cy="9" r="1.3"/><circle cx="20" cy="9" r="1.3"/>',
+ params:[F("B","عرض القاعدة B","Base B",90),F("A","ارتفاع الجناح A","Leg A",60),F("W","العمق W","Depth W",45),F("T","السماكة T","Thickness T",8),F("d","قطر الثقوب d","Hole dia d",8)],
+ draw(g,p){const s=fit(p.B*1.9,p.A,380,250),b=p.B*s,a=p.A*s,t=p.T*s,x=135,y=110,r=p.d*s/2;
+  path(g,`M${x} ${y} h${t} v${a-t} h${b-2*t} v${-(a-t)} h${t} v${a} h${-b} z`);
+  circ(g,x+t/2,y+a*0.35,r);center(g,x+t/2,y+a*0.35,r);
+  circ(g,x+b-t/2,y+a*0.35,r);center(g,x+b-t/2,y+a*0.35,r);
+  dimH(g,x,x+b,y+a+32,p.B);dimV(g,y,y+a,x-34,p.A);
+  dimH(g,x,x+t,y-18,p.T);txt(g,x+b/2,y+a*0.35,"2× "+dia(p.d),11);
+  const sx=x+b+76;rect(g,sx,y,p.W*s,a);dimH(g,sx,sx+p.W*s,y+a+32,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.B,height:p.W,thickness:p.T,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"l1"},
+  {op:"draw_rectangle",sketch:"l1",width:p.T,height:p.W,at:{u:0,v:0}},
+  {op:"extrude",sketch:"l1",depth:p.A-p.T,name:"leg1"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"l2"},
+  {op:"draw_rectangle",sketch:"l2",width:p.T,height:p.W,at:{u:p.B-p.T,v:0}},
+  {op:"extrude",sketch:"l2",depth:p.A-p.T,name:"leg2"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"leg1",facing:"+x"}},at:{u:p.A*0.35,v:p.W/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"leg2",facing:"+x"}},at:{u:p.A*0.35,v:p.W/2}},
+  {op:"save_part",path:"u_bracket.SLDPRT"}]};}},
+
+{id:"zbracket",code:"M-05",grp:"mill",
+ name:{ar:"حامل Z",en:"Z-Bracket"},
+ icon:'<path d="M5 6 h12 v6 h6 v8 h-12 v-6 h-6 z"/>',
+ params:[F("a","الجناح العلوي a","Top leg a",40),F("h","ارتفاع الوسط h","Web height h",50),F("b","الجناح السفلي b","Bottom leg b",40),F("W","العرض W","Width W",40),F("T","السماكة T","Thickness T",6),F("d","قطر الثقوب d","Hole dia d",7)],
+ draw(g,p){const s=fit(p.a+p.b,p.h+2*p.T,330,240),a=p.a*s,b=p.b*s,hh=p.h*s,t=p.T*s,x=170,y=115,r=p.d*s/2;
+  path(g,`M${x} ${y} h${a} v${t} h${-(a-t)} v${hh} h${b} v${t} h${-(b+t)} z`,"var(--ink)");
+  circ(g,x+a*0.4,y+t/2,r);center(g,x+a*0.4,y+t/2,r);
+  circ(g,x+a+b*0.6-t,y+t+hh+t/2,r);center(g,x+a+b*0.6-t,y+t+hh+t/2,r);
+  dimH(g,x,x+a,y-18,p.a);dimH(g,x+a-t,x+a-t+b+t,y+t+hh+t+30,p.b);
+  dimV(g,y,y+t+hh+t,x-34,(p.h+2*p.T).toFixed(0));
+  txt(g,x+a+40,y+hh/2,"2× "+dia(p.d),11);
+  const sx=x+a+b+70;rect(g,sx,y,p.W*s,t+hh+t);dimH(g,sx,sx+p.W*s,y+t+hh+t+30,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.a,height:p.W,thickness:p.T,name:"top"},
+  {op:"create_sketch",on:{face:{of_feature:"top",facing:"-z"}},name:"ws"},
+  {op:"draw_rectangle",sketch:"ws",width:p.T,height:p.W,at:{u:p.a-p.T,v:0}},
+  {op:"extrude",sketch:"ws",depth:p.h,name:"web"},
+  {op:"create_sketch",on:{face:{of_feature:"web",facing:"-z"}},name:"bs"},
+  {op:"draw_rectangle",sketch:"bs",width:p.b,height:p.W,at:{u:p.a-p.T,v:0}},
+  {op:"extrude",sketch:"bs",depth:p.T,name:"bottom"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"top",facing:"+z"}},at:{u:p.a*0.4,v:p.W/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"bottom",facing:"-z"}},at:{u:p.a-p.T+p.b*0.6,v:p.W/2}},
+  {op:"save_part",path:"z_bracket.SLDPRT"}]};}},
+
+{id:"ribplate",code:"M-06",grp:"mill",
+ name:{ar:"لوحة بثقوب تخفيف",en:"Plate, lightening holes"},
+ icon:'<rect x="3" y="8" width="22" height="10" rx="1"/><circle cx="8" cy="13" r="2"/><circle cx="14" cy="13" r="2"/><circle cx="20" cy="13" r="2"/>',
+ params:[F("L","الطول L","Length L",180),F("W","العرض W","Width W",50),F("T","السماكة T","Thickness T",8),F("d","قطر الثقب d","Hole dia d",22),F("n","عدد الثقوب n","Holes n",4,2)],
+ draw(g,p){const s=fit(p.L,p.W,360,150),w=p.L*s,h=p.W*s,x=110,y=150,r=p.d*s/2;
+  rect(g,x,y,w,h);
+  const pitch=w/(p.n),start=x+pitch/2;
+  for(let i=0;i<p.n;i++){circ(g,start+i*pitch,y+h/2,r);}
+  center(g,start,y+h/2,r);
+  dimH(g,x,x+w,y+h+32,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  dimH(g,start,start+pitch,y-20,(p.L/p.n).toFixed(1));
+  txt(g,x+w-70,y-22,p.n+"× "+dia(p.d),12);
+  const sy=y+h+62;rect(g,x,sy,w,Math.max(p.T*s,9));dimV(g,sy,sy+Math.max(p.T*s,9),x+w+40,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"plate"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"plate",facing:"+z"}},at:{u:p.L/p.n/2,v:p.W/2},name:"seed"},
+  {op:"linear_pattern",of_feature:"seed",nx:p.n,dx:p.L/p.n,ny:1,dy:0},
+  {op:"save_part",path:"rib_plate.SLDPRT"}]};}},
+
+{id:"motorbase",code:"M-07",grp:"mill",
+ name:{ar:"قاعدة موتور بفتحات",en:"Motor base, slots"},
+ icon:'<rect x="3" y="6" width="22" height="14" rx="1"/><rect x="6" y="9" width="6" height="2.6" rx="1.3"/><rect x="16" y="9" width="6" height="2.6" rx="1.3"/><rect x="6" y="15" width="6" height="2.6" rx="1.3"/><rect x="16" y="15" width="6" height="2.6" rx="1.3"/>',
+ params:[F("L","الطول L","Length L",160),F("W","العرض W","Width W",110),F("T","السماكة T","Thickness T",10),F("sl","طول الفتحة sl","Slot len sl",24,4),F("sw","عرض الفتحة sw","Slot width sw",9,2),F("m","إزاحة من الحافة","Edge margin",20,4)],
+ draw(g,p){const s=fit(p.L,p.W,330,200),w=p.L*s,h=p.W*s,x=115,y=100,m=p.m*s,sl=p.sl*s,sr=p.sw*s/2;
+  rect(g,x,y,w,h);
+  [[x+m+sl/2,y+m],[x+w-m-sl/2,y+m],[x+m+sl/2,y+h-m],[x+w-m-sl/2,y+h-m]].forEach(([cx,cy])=>slotH(g,cx,cy,sl,sr));
+  dimH(g,x,x+w,y+h+32,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  txt(g,x+w/2,y-16,"4× slot "+p.sl+"×"+p.sw,12);
+  dimH(g,x,x+m,y+h+52,p.m);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"base"},
+  {op:"slot",length:p.sl,width:p.sw,through:true,on:{face:{of_feature:"base",facing:"+z"}},at:{u:p.m+p.sl/2,v:p.m},name:"seed"},
+  {op:"linear_pattern",of_feature:"seed",nx:2,dx:p.L-2*p.m-p.sl,ny:2,dy:p.W-2*p.m},
+  {op:"save_part",path:"motor_base.SLDPRT"}]};}},
+
+{id:"tray",code:"M-08",grp:"mill",
+ name:{ar:"صينية بجوانب",en:"Tray with walls"},
+ icon:'<rect x="4" y="7" width="20" height="13" rx="1"/><rect x="7" y="10" width="14" height="7" rx="1"/>',
+ params:[F("L","الطول L","Length L",150),F("W","العرض W","Width W",100),F("T","سماكة القاع T","Base thk T",6),F("h","ارتفاع الجدار h","Wall height h",25),F("t","سماكة الجدار t","Wall thk t",5)],
+ draw(g,p){const s=fit(p.L,p.W,300,180),w=p.L*s,h=p.W*s,x=120,y=95,t=p.t*s;
+  rect(g,x,y,w,h);rect(g,x+t,y+t,w-2*t,h-2*t);
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  dimH(g,x,x+t,y-16,p.t);
+  const sy=y+h+58,wh=p.h*s,bt=Math.max(p.T*s,7);
+  path(g,`M${x} ${sy+wh} v${-wh} h${t} v${wh-bt} h${w-2*t} v${-(wh-bt)} h${t} v${wh} `);
+  line(g,x,sy+wh,x+w,sy+wh);line(g,x,sy+wh+bt,x+w,sy+wh+bt);
+  line(g,x,sy+wh,x,sy+wh+bt);line(g,x+w,sy+wh,x+w,sy+wh+bt);
+  dimV(g,sy,sy+wh+bt,x+w+40,(p.h+p.T).toFixed(0));},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"wallsk"},
+  {op:"draw_rectangle",sketch:"wallsk",width:p.L,height:p.W,at:{u:0,v:0}},
+  {op:"draw_rectangle",sketch:"wallsk",width:p.L-2*p.t,height:p.W-2*p.t,at:{u:p.t,v:p.t}},
+  {op:"extrude",sketch:"wallsk",depth:p.h,name:"walls"},
+  {op:"save_part",path:"tray.SLDPRT"}]};}},
+
+{id:"panelcut",code:"M-09",grp:"mill",
+ name:{ar:"لوحة واجهة بفتحة",en:"Panel, rectangular cutout"},
+ icon:'<rect x="3" y="5" width="22" height="16" rx="1"/><rect x="8" y="9" width="12" height="8"/><circle cx="5.5" cy="7.5" r="1"/><circle cx="22.5" cy="7.5" r="1"/><circle cx="5.5" cy="18.5" r="1"/><circle cx="22.5" cy="18.5" r="1"/>',
+ params:[F("L","الطول L","Length L",180),F("W","العرض W","Width W",120),F("T","السماكة T","Thickness T",4),F("cw","عرض الفتحة cw","Cutout w",90,4),F("ch","ارتفاع الفتحة ch","Cutout h",50,4),F("d","قطر ثقوب الزوايا","Corner hole d",5),F("m","إزاحة الثقوب","Hole margin",9,3)],
+ draw(g,p){const s=fit(p.L,p.W,330,210),w=p.L*s,h=p.W*s,x=115,y=95,m=p.m*s,r=p.d*s/2,cw=p.cw*s,ch=p.ch*s;
+  rect(g,x,y,w,h);rect(g,x+(w-cw)/2,y+(h-ch)/2,cw,ch);
+  [[x+m,y+m],[x+w-m,y+m],[x+m,y+h-m],[x+w-m,y+h-m]].forEach(([cx,cy])=>circ(g,cx,cy,r));
+  dimH(g,x,x+w,y+h+32,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  dimH(g,x+(w-cw)/2,x+(w+cw)/2,y+(h-ch)/2-14,p.cw);
+  dimV(g,y+(h-ch)/2,y+(h+ch)/2,x+(w+cw)/2+22,p.ch);
+  txt(g,x+w-64,y-14,"4× "+dia(p.d),11);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"panel"},
+  {op:"add_corner_holes",diameter:p.d,margin:p.m,of_feature:"panel"},
+  {op:"create_sketch",on:{face:{of_feature:"panel",facing:"+z"}},name:"cs"},
+  {op:"draw_rectangle",sketch:"cs",width:p.cw,height:p.ch,at:{u:(p.L-p.cw)/2,v:(p.W-p.ch)/2}},
+  {op:"cut",sketch:"cs",through:true,name:"window"},
+  {op:"save_part",path:"panel_cutout.SLDPRT"}]};}},
+
+{id:"shim",code:"M-10",grp:"mill",
+ name:{ar:"شيمة (رقاقة ضبط)",en:"Shim plate"},
+ icon:'<rect x="4" y="9" width="20" height="8" rx="1"/><circle cx="9" cy="13" r="1.4"/><circle cx="19" cy="13" r="1.4"/>',
+ params:[F("L","الطول L","Length L",60,4),F("W","العرض W","Width W",30,3),F("T","السماكة T","Thickness T",0.5,0.05),F("d","قطر الثقوب d","Hole dia d",6),F("p","المسافة بين الثقوب","Hole pitch",40,2)],
+ draw(g,p){const s=fit(p.L,p.W,300,140),w=p.L*s,h=p.W*s,x=150,y=170,r=p.d*s/2,pt=p.p*s;
+  rect(g,x,y,w,h);
+  circ(g,x+w/2-pt/2,y+h/2,r);center(g,x+w/2-pt/2,y+h/2,r);
+  circ(g,x+w/2+pt/2,y+h/2,r);center(g,x+w/2+pt/2,y+h/2,r);
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  dimH(g,x+w/2-pt/2,x+w/2+pt/2,y-18,p.p);
+  txt(g,x+w/2,y+h+52,"T = "+p.T+" mm",12);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"shim"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"shim",facing:"+z"}},at:{u:p.L/2-p.p/2,v:p.W/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"shim",facing:"+z"}},at:{u:p.L/2+p.p/2,v:p.W/2}},
+  {op:"save_part",path:"shim.SLDPRT"}]};}},
+
+/* ═══════════ MACH — عناصر آلات (5) ═══════════ */
+{id:"tnut",code:"K-01",grp:"mach",
+ name:{ar:"صامولة T",en:"T-nut"},
+ icon:'<path d="M9 6 h10 v6 h4 v8 h-18 v-8 h4 z"/><circle cx="14" cy="15" r="2"/>',
+ params:[F("bw","عرض القاعدة bw","Base width bw",18,3),F("tw","عرض الرقبة tw","Neck width tw",10,2),F("L","الطول L","Length L",20,3),F("bt","سماكة القاعدة bt","Base thk bt",7,1),F("tt","ارتفاع الرقبة tt","Neck ht tt",6,1),F("M","قلاووظ M","Thread M",8,2)],
+ draw(g,p){const s=fit(p.bw,p.bt+p.tt,220,200)*0.9,bw=p.bw*s,tw=p.tw*s,bt=p.bt*s,tt=p.tt*s,x=200,y=150;
+  path(g,`M${x} ${y+tt} h${(bw-tw)/2} v${-tt} h${tw} v${tt} h${(bw-tw)/2} v${bt} h${-bw} z`);
+  thin(g,x+bw/2,y-14,x+bw/2,y+tt+bt+14);
+  circ(g,x+bw/2,y+tt+bt/2,p.M*s/2*0.85,"3 3");
+  dimH(g,x,x+bw,y+tt+bt+30,p.bw);dimH(g,x+(bw-tw)/2,x+(bw+tw)/2,y-18,p.tw);
+  dimV(g,y,y+tt,x-30,p.tt);dimV(g,y+tt,y+tt+bt,x-30,p.bt);
+  txt(g,x+bw+42,y+tt+bt/2,"M"+p.M,12);
+  const sx=x+bw+86;rect(g,sx,y,p.L*s,tt+bt);dimH(g,sx,sx+p.L*s,y+tt+bt+30,p.L);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.bw,thickness:p.bt,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"ns"},
+  {op:"draw_rectangle",sketch:"ns",width:p.L,height:p.tw,at:{u:0,v:(p.bw-p.tw)/2}},
+  {op:"extrude",sketch:"ns",depth:p.tt,name:"neck"},
+  {op:"hole",diameter:p.M,through:true,on:{face:{of_feature:"neck",facing:"+z"}},at:{u:p.L/2,v:p.bw/2}},
+  {op:"save_part",path:"t_nut.SLDPRT"}]};}},
+
+{id:"pillow",code:"K-02",grp:"mach",
+ name:{ar:"حامل محور مبسّط",en:"Pillow block (simple)"},
+ icon:'<rect x="3" y="17" width="22" height="5"/><rect x="9" y="7" width="10" height="10"/><circle cx="14" cy="12" r="3"/><circle cx="6" cy="19.5" r="1.2"/><circle cx="22" cy="19.5" r="1.2"/>',
+ params:[F("L","طول القاعدة L","Base len L",90),F("W","عمق القاعدة W","Base depth W",40),F("T","سماكة القاعدة T","Base thk T",12),F("bw","عرض العمود bw","Block width bw",44,4),F("bh","ارتفاع العمود bh","Block ht bh",45,4),F("B","قطر التجويف B","Bore B",22),F("hc","ارتفاع المركز hc","Center ht hc",28),F("d","ثقوب القاعدة d","Base holes d",9)],
+ draw(g,p){const s=fit(p.L,p.T+p.bh,300,230),L=p.L*s,T=p.T*s,bw=p.bw*s,bh=p.bh*s,x=140,yb=300;
+  rect(g,x,yb-T,L,T);rect(g,x+(L-bw)/2,yb-T-bh,bw,bh);
+  const ccy=yb - p.hc*s;
+  circ(g,x+L/2,ccy,p.B*s/2);center(g,x+L/2,ccy,p.B*s/2);
+  circ(g,x+L*0.12,yb-T/2,p.d*s/2);circ(g,x+L*0.88,yb-T/2,p.d*s/2);
+  dimH(g,x,x+L,yb+28,p.L);dimV(g,yb-T,yb,x-32,p.T);
+  dimV(g,ccy,yb,x+L+38,p.hc);txt(g,x+L/2,ccy+4,dia(p.B),11);
+  txt(g,x+L/2,yb-T-bh-12,p.bw+" × "+p.bh,11);
+  txt(g,x+L*0.12,yb-T-10,"2× "+dia(p.d),10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"bs"},
+  {op:"draw_rectangle",sketch:"bs",width:p.bw,height:p.W,at:{u:(p.L-p.bw)/2,v:0}},
+  {op:"extrude",sketch:"bs",depth:p.bh,name:"block"},
+  {op:"hole",diameter:p.B,through:true,on:{face:{of_feature:"block",facing:"+y"}},at:{u:p.L/2,v:p.hc}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"base",facing:"+z"}},at:{u:p.L*0.12,v:p.W/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"base",facing:"+z"}},at:{u:p.L*0.88,v:p.W/2}},
+  {op:"save_part",path:"pillow_block.SLDPRT"}]};}},
+
+{id:"rail",code:"K-03",grp:"mach",
+ name:{ar:"سكة مثقوبة",en:"Drilled rail"},
+ icon:'<rect x="2" y="10" width="24" height="6" rx="1"/><circle cx="6" cy="13" r="1.1"/><circle cx="11" cy="13" r="1.1"/><circle cx="16" cy="13" r="1.1"/><circle cx="21" cy="13" r="1.1"/>',
+ params:[F("L","الطول L","Length L",200),F("W","العرض W","Width W",25,3),F("T","السماكة T","Thickness T",8),F("d","قطر الثقب d","Hole dia d",6),F("p","الخطوة p","Pitch p",30,2),F("n","عدد الثقوب n","Holes n",6,2)],
+ draw(g,p){const s=fit(p.L,p.W,380,110),w=p.L*s,h=p.W*s,x=105,y=180,r=p.d*s/2,pt=p.p*s;
+  rect(g,x,y,w,h);
+  const start=x+(w-(p.n-1)*pt)/2;
+  for(let i=0;i<p.n;i++)circ(g,start+i*pt,y+h/2,r);
+  center(g,start,y+h/2,r);
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+38,p.W);
+  dimH(g,start,start+pt,y-18,p.p);txt(g,x+w-64,y-20,p.n+"× "+dia(p.d),12);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"rail"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"rail",facing:"+z"}},at:{u:(p.L-(p.n-1)*p.p)/2,v:p.W/2},name:"seed"},
+  {op:"linear_pattern",of_feature:"seed",nx:p.n,dx:p.p,ny:1,dy:0},
+  {op:"save_part",path:"drilled_rail.SLDPRT"}]};}},
+
+{id:"block",code:"K-04",grp:"mach",
+ name:{ar:"بلوك فاصل",en:"Spacer block"},
+ icon:'<rect x="6" y="7" width="16" height="13" rx="1"/><circle cx="11" cy="13.5" r="1.4"/><circle cx="17" cy="13.5" r="1.4"/>',
+ params:[F("L","الطول L","Length L",70,3),F("W","العرض W","Width W",40,3),F("H","الارتفاع H","Height H",30),F("d","قطر الثقوب d","Hole dia d",8),F("p","المسافة p","Pitch p",40,2)],
+ draw(g,p){const s=fit(p.L,p.W,280,170),w=p.L*s,h=p.W*s,x=145,y=110,r=p.d*s/2,pt=p.p*s;
+  rect(g,x,y,w,h);
+  circ(g,x+w/2-pt/2,y+h/2,r);center(g,x+w/2-pt/2,y+h/2,r);
+  circ(g,x+w/2+pt/2,y+h/2,r);center(g,x+w/2+pt/2,y+h/2,r);
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+38,p.W);
+  dimH(g,x+w/2-pt/2,x+w/2+pt/2,y-18,p.p);
+  const sy=y+h+58,hh=Math.max(p.H*s*0.5,16);rect(g,x,sy,w,hh);
+  dimV(g,sy,sy+hh,x+w+38,p.H);txt(g,x+w/2,y+h/2-r-8,"2× "+dia(p.d),11);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.H,name:"block"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"block",facing:"+z"}},at:{u:p.L/2-p.p/2,v:p.W/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"block",facing:"+z"}},at:{u:p.L/2+p.p/2,v:p.W/2}},
+  {op:"save_part",path:"spacer_block.SLDPRT"}]};}},
+
+{id:"clamp",code:"K-05",grp:"mach",
+ name:{ar:"مشبك تثبيت (Strap)",en:"Strap clamp"},
+ icon:'<rect x="3" y="10" width="22" height="5" rx="1"/><rect x="8" y="11.5" width="9" height="2" rx="1"/><rect x="21" y="15" width="4" height="4"/>',
+ params:[F("L","الطول L","Length L",110),F("W","العرض W","Width W",32,3),F("T","السماكة T","Thickness T",12),F("sl","طول الفتحة sl","Slot len sl",45,4),F("sw","عرض الفتحة sw","Slot width sw",11,2),F("sh","ارتفاع الكعب sh","Heel ht sh",8,1),F("stl","طول الكعب stl","Heel len stl",15,2)],
+ draw(g,p){const s=fit(p.L,p.W,320,140),w=p.L*s,h=p.W*s,x=130,y=110,sl=p.sl*s,sr=p.sw*s/2;
+  rect(g,x,y,w,h);slotH(g,x+w*0.42,y+h/2,sl,sr);
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+38,p.W);
+  txt(g,x+w*0.42,y-14,"slot "+p.sl+"×"+p.sw,11);
+  const sy=y+h+58,t=p.T*s,sh=p.sh*s,stl=p.stl*s;
+  path(g,`M${x} ${sy} h${w} v${t} h${-(stl)} v${sh} h${-(w-stl)} v${-(sh+t)+t} v${-t} z`);
+  path(g,`M${x} ${sy} h${w} v${t} h${-stl} v${sh} h${stl-w} z`,"var(--ink)");
+  dimV(g,sy,sy+t,x-30,p.T);dimV(g,sy+t,sy+t+sh,x+w+38,p.sh);
+  dimH(g,x+w-stl,x+w,sy+t+sh+24,p.stl);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"bar"},
+  {op:"slot",length:p.sl,width:p.sw,through:true,on:{face:{of_feature:"bar",facing:"+z"}},at:{u:p.L*0.42,v:p.W/2}},
+  {op:"create_sketch",on:{face:{of_feature:"bar",facing:"-z"}},name:"hs"},
+  {op:"draw_rectangle",sketch:"hs",width:p.stl,height:p.W,at:{u:p.L-p.stl,v:0}},
+  {op:"extrude",sketch:"hs",depth:p.sh,name:"heel"},
+  {op:"save_part",path:"strap_clamp.SLDPRT"}]};}},
+
+/* ═══════════ FIX — قوالب وفحص (3) ═══════════ */
+{id:"stepblock",code:"F-01",grp:"fix",
+ name:{ar:"بلوك درجات معايرة",en:"Step calibration block"},
+ icon:'<path d="M4 20 h20 v-4 h-7 v-4 h-7 v-4 h-6 z"/>',
+ params:[F("sl","طول الدرجة sl","Step len sl",25,3),F("W","العرض W","Width W",30,3),F("h1","ارتفاع 1","Height 1",10),F("h2","ارتفاع 2","Height 2",20),F("h3","ارتفاع 3","Height 3",30)],
+ draw(g,p){const s=fit(p.sl*3,p.h3,300,220),sl=p.sl*s,h1=p.h1*s,h2=p.h2*s,h3=p.h3*s,x=160,yb=330;
+  path(g,`M${x} ${yb} v${-h1} h${sl} v${-(h2-h1)} h${sl} v${-(h3-h2)} h${sl} v${h3} z`);
+  dimH(g,x,x+sl,yb+28,p.sl);dimH(g,x+sl,x+2*sl,yb+28,p.sl);dimH(g,x+2*sl,x+3*sl,yb+28,p.sl);
+  dimV(g,yb-h1,yb,x-32,p.h1);dimV(g,yb-h3,yb,x+3*sl+38,p.h3);
+  txt(g,x+sl*1.5,yb-h2-10,p.h2+"",12);
+  const sx=x+3*sl+86;rect(g,sx,yb-h3,p.W*s,h3);dimH(g,sx,sx+p.W*s,yb+28,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.sl*3,height:p.W,thickness:p.h1,name:"s1"},
+  {op:"create_sketch",on:{face:{of_feature:"s1",facing:"+z"}},name:"k2"},
+  {op:"draw_rectangle",sketch:"k2",width:p.sl*2,height:p.W,at:{u:p.sl,v:0}},
+  {op:"extrude",sketch:"k2",depth:p.h2-p.h1,name:"s2"},
+  {op:"create_sketch",on:{face:{of_feature:"s2",facing:"+z"}},name:"k3"},
+  {op:"draw_rectangle",sketch:"k3",width:p.sl,height:p.W,at:{u:p.sl*2,v:0}},
+  {op:"extrude",sketch:"k3",depth:p.h3-p.h2,name:"s3"},
+  {op:"save_part",path:"step_block.SLDPRT"}]};}},
+
+{id:"trysquare",code:"F-02",grp:"fix",
+ name:{ar:"زاوية فحص 90°",en:"90° try square"},
+ icon:'<path d="M6 4 v18 h18 v-4 h-14 v-14 z"/>',
+ params:[F("A","طول الشفرة A","Blade A",120),F("B","طول القاعدة B","Stock B",80),F("bw","عرض الشفرة bw","Blade w",22,3),F("sw","عرض القاعدة sw","Stock w",28,3),F("T","السماكة T","Thickness T",5)],
+ draw(g,p){const s=fit(Math.max(p.A,p.B)*1.6,Math.max(p.A,p.B),380,270),a=p.A*s,b=p.B*s,bw=p.bw*s,sw=p.sw*s,x=155,y=95;
+  path(g,`M${x} ${y} h${bw} v${a-sw} h${b-bw} v${sw} h${-b} z`);
+  path(g,`M${x+bw+14} ${y+14} v${a-sw-28} h${-2}`,"var(--dim)",.8);
+  txt(g,x+bw+30,y+a-sw-16,"90°",12);
+  dimV(g,y,y+a,x-32,p.A);dimH(g,x,x+b,y+a+30,p.B);
+  dimH(g,x,x+bw,y-16,p.bw);dimV(g,y+a-sw,y+a,x+b+36,p.sw);
+  const sx=x+b+84;rect(g,sx,y,Math.max(p.T*s,7),a);dimH(g,sx,sx+Math.max(p.T*s,7),y+a+30,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.B,height:p.sw,thickness:p.T,name:"stock"},
+  {op:"create_sketch",on:{face:{of_feature:"stock",facing:"+y"}},name:"bs"},
+  {op:"draw_rectangle",sketch:"bs",width:p.bw,height:p.T,at:{u:0,v:0}},
+  {op:"extrude",sketch:"bs",depth:p.A-p.sw,name:"blade"},
+  {op:"save_part",path:"try_square.SLDPRT"}]};}},
+
+{id:"thickgauge",code:"F-03",grp:"fix",
+ name:{ar:"لوحة عيّنات سماكة",en:"Thickness sample plate"},
+ icon:'<path d="M4 19 h20 v-2 h-5 v-2 h-5 v-2 h-5 v-2 h-5 z"/>',
+ params:[F("sl","طول العيّنة sl","Sample len sl",22,3),F("W","العرض W","Width W",25,3),F("t","السماكة الأساس t","Base thk t",2,0.2),F("inc","الزيادة inc","Increment inc",2,0.2)],
+ draw(g,p){const n=4,L=p.sl*n,tmax=p.t+p.inc*(n-1);
+  const s=fit(L,tmax*3,330,190),sl=p.sl*s,x=140,yb=290;
+  let d=`M${x} ${yb}`;
+  for(let i=0;i<n;i++){const th=(p.t+p.inc*i)*s*3;d+=` v${i===0?-th:-(p.inc*s*3)} h${sl}`;}
+  d+=` v${tmax*s*3} z`;path(g,d);
+  for(let i=0;i<n;i++)txt(g,x+sl*i+sl/2,yb-((p.t+p.inc*i)*s*3)-8,(p.t+p.inc*i).toFixed(1),11);
+  dimH(g,x,x+sl,yb+26,p.sl);
+  txt(g,x+L/2,yb+50,"steps ×"+n+" — t..t+"+((n-1)*p.inc).toFixed(1),11,"var(--steel)");
+  const sx=x+L+80;rect(g,sx,yb-60,p.W*s,60);dimH(g,sx,sx+p.W*s,yb+26,p.W);},
+ json(p){const cmds=[{op:"create_plate",width:p.sl*4,height:p.W,thickness:p.t,name:"g1"}];
+  for(let i=1;i<4;i++){cmds.push(
+   {op:"create_sketch",on:{face:{of_feature:"g"+i,facing:"+z"}},name:"gs"+(i+1)},
+   {op:"draw_rectangle",sketch:"gs"+(i+1),width:p.sl*(4-i),height:p.W,at:{u:p.sl*i,v:0}},
+   {op:"extrude",sketch:"gs"+(i+1),depth:p.inc,name:"g"+(i+1)});}
+  cmds.push({op:"save_part",path:"thickness_gauge.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+];
+window.__PARTS.push(...MORE);
+/* ═══════════ BATCH 2 — إضافات (8) ═══════════ */
+const MORE2=[
+{id:"piston",code:"L-13",grp:"lathe",
+ name:{ar:"مكبس بسيط بحزوز",en:"Simple grooved piston"},
+ icon:'<rect x="8" y="5" width="12" height="16" rx="1.5"/><line x1="8" y1="9" x2="20" y2="9"/><line x1="8" y1="12" x2="20" y2="12"/><circle cx="14" cy="17" r="1.6"/>',
+ params:[F("D","القطر D","Diameter D",60,5),F("H","الارتفاع H","Height H",55),F("g","عرض الحز g","Groove w g",3,0.5),F("gd","عمق الحز gd","Groove depth gd",3,0.5),F("n","عدد الحزوز n","Grooves n",2,1),F("pd","قطر ثقب المحور pd","Pin bore pd",16),F("ph","ارتفاع المحور ph","Pin height ph",20)],
+ draw(g_,p){const s=fit(p.D*2.2,p.H,360,280),D=p.D*s,H=p.H*s,x=170,y=120,gw=p.g*s,gd=p.gd*s;
+  rect(g_,x,y,D,H);axis(g_,x,x+D,y+H/2);
+  for(let i=0;i<p.n;i++){const gy=y+10+i*(gw+8);
+   rect(g_,x,gy,gd,gw);rect(g_,x+D-gd,gy,gd,gw);}
+  const pcy=y+H-p.ph*s;circ(g_,x+D/2,pcy,p.pd*s/2);center(g_,x+D/2,pcy,p.pd*s/2);
+  dimV(g_,y,y+H,x-34,p.H);dimH(g_,x,x+D,y+H+30,dia(p.D));
+  txt(g_,x+D+52,y+16,p.n+"× "+p.g+"×"+p.gd,11);
+  txt(g_,x+D/2,pcy-p.pd*s/2-8,dia(p.pd),11);
+  dimV(g_,pcy,y+H,x+D+38,p.ph);},
+ json(p){const cmds=[
+  {op:"create_cylinder",diameter:p.D,height:p.H,name:"body"},
+  {op:"hole",diameter:p.pd,through:true,on:{face:{of_feature:"body",facing:"+y"}},at:{u:0,v:p.ph}}];
+  for(let i=0;i<p.n;i++){
+   const off=p.H-8-i*(p.g+5);
+   cmds.push({op:"create_plane",offset_from:"bottom",distance:off,name:"gp"+i},
+    {op:"create_sketch",on:{plane:"gp"+i},name:"gs"+i},
+    {op:"draw_circle",sketch:"gs"+i,diameter:p.D+2,at:"center"},
+    {op:"draw_circle",sketch:"gs"+i,diameter:p.D-2*p.gd,at:"center"},
+    {op:"cut",sketch:"gs"+i,depth:p.g,name:"groove"+i});}
+  cmds.push({op:"save_part",path:"piston.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+
+{id:"nozzle",code:"L-14",grp:"lathe",
+ name:{ar:"فوهة (نوزل) مدرّجة",en:"Stepped nozzle"},
+ icon:'<path d="M4 10 h8 v-2 h6 l6 3 v4 l-6 3 h-6 v-2 h-8 z"/><line x1="4" y1="13.5" x2="24" y2="13.5" stroke-dasharray="2 2"/>',
+ params:[F("D1","قطر الجسم D1","Body dia D1",24,3),F("L1","طول الجسم L1","Body len L1",30),F("D2","قطر الطرف D2","Tip dia D2",10),F("L2","طول الطرف L2","Tip len L2",18),F("b","قطر المجرى b","Bore b",5,0.5)],
+ draw(g,p){const s=fit(p.L1+p.L2,p.D1,320,140),x=175,cy=200;
+  const l1=p.L1*s,l2=p.L2*s,d1=p.D1*s,d2=p.D2*s,br=p.b*s/2;
+  rect(g,x,cy-d1/2,l1,d1);rect(g,x+l1,cy-d2/2,l2,d2);
+  thin(g,x,cy-br,x+l1+l2,cy-br);thin(g,x,cy+br,x+l1+l2,cy+br);axis(g,x,x+l1+l2,cy);
+  dimH(g,x,x+l1,cy+d1/2+30,p.L1);dimH(g,x+l1,x+l1+l2,cy+d1/2+30,p.L2);
+  dimV(g,cy-d1/2,cy+d1/2,x-34,dia(p.D1));dimV(g,cy-d2/2,cy+d2/2,x+l1+l2+36,dia(p.D2));
+  txt(g,x+(l1+l2)/2,cy-d1/2-12,"bore "+dia(p.b),11);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D1,height:p.L1,name:"body"},
+  {op:"create_sketch",on:{face:{of_feature:"body",facing:"+z"}},name:"ts"},
+  {op:"draw_circle",sketch:"ts",diameter:p.D2,at:"center"},
+  {op:"extrude",sketch:"ts",depth:p.L2,name:"tip"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"tip",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"nozzle.SLDPRT"}]};}},
+
+{id:"hexnut",code:"K-06",grp:"mach",
+ name:{ar:"صامولة سداسية",en:"Hex nut"},
+ icon:'<path d="M14 4 l8 4.5 v9 l-8 4.5 l-8 -4.5 v-9 z"/><circle cx="14" cy="13" r="3.2"/>',
+ params:[F("M","القلاووظ M","Thread M",10,2),F("s","عرض المفتاح s","Across flats s",17,4),F("H","الارتفاع H","Height H",8)],
+ draw(g,p){const sc=fit(p.s*2.4,p.s,300,240),S=p.s*sc,R=S/Math.sqrt(3),cx=215,cy=200;
+  let d="M";for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;
+   d+=(i?"L":"")+(cx+R*Math.cos(a)).toFixed(1)+" "+(cy+R*Math.sin(a)).toFixed(1)+" ";}
+  path(g,d+"Z");
+  circ(g,cx,cy,p.M*sc/2*0.85,"3 3");circ(g,cx,cy,p.M*sc/2*0.55);center(g,cx,cy,R);
+  dimH(g,cx-S/2,cx+S/2,cy+R+30,"s="+p.s);txt(g,cx,cy-R-12,"M"+p.M,12);
+  const sx=cx+R+76,h=Math.max(p.H*sc,12);rect(g,sx,cy-S/2,h,S);dimH(g,sx,sx+h,cy+R+30,p.H);
+  txt(g,cx,cy+R+52,"hex via 6× tangent-plane cuts",10,"var(--dim)");},
+ json(p){const R=p.s/Math.sqrt(3),cmds=[
+  {op:"create_cylinder",diameter:2*R,height:p.H,name:"blank"},
+  {op:"hole",diameter:p.M*0.85,through:true,on:{face:{of_feature:"blank",facing:"+z"}},at:"center"}];
+  for(let i=0;i<6;i++){cmds.push(
+   {op:"create_plane",offset_from:"front",distance:p.s/2,rotate_deg:i*60,name:"flat"+i},
+   {op:"create_sketch",on:{plane:"flat"+i},name:"fs"+i},
+   {op:"draw_rectangle",sketch:"fs"+i,width:2*R,height:p.H,at:{u:-R,v:0}},
+   {op:"cut",sketch:"fs"+i,depth:R-p.s/2+1,name:"f"+i});}
+  cmds.push({op:"save_part",path:"hex_nut.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+
+{id:"bolt",code:"K-07",grp:"mach",
+ name:{ar:"برغي SHCS مبسّط",en:"SHCS bolt (simplified)"},
+ icon:'<rect x="4" y="9" width="6" height="8" rx="1"/><rect x="10" y="11" width="14" height="4"/>',
+ params:[F("M","القلاووظ M","Thread M",8,2),F("L","طول الساق L","Shank len L",30),F("hd","قطر الرأس hd","Head dia hd",13,3),F("hh","ارتفاع الرأس hh","Head ht hh",8,1),F("hex","مفتاح داخلي hex","Socket hex",6,1)],
+ draw(g,p){const s=fit(p.L+p.hh,p.hd,320,110),x=185,cy=200;
+  const hh=p.hh*s,hd=p.hd*s,L=p.L*s,d=p.M*s;
+  rect(g,x,cy-hd/2,hh,hd);rect(g,x+hh,cy-d/2,L,d);axis(g,x,x+hh+L,cy);
+  rect(g,x+hh*0.25,cy-p.hex*s/2,hh*0.5,p.hex*s);
+  dimH(g,x,x+hh,cy+hd/2+28,p.hh);dimH(g,x+hh,x+hh+L,cy+hd/2+28,p.L);
+  dimV(g,cy-hd/2,cy+hd/2,x-32,dia(p.hd));dimV(g,cy-d/2,cy+d/2,x+hh+L+34,"M"+p.M);
+  txt(g,x+hh/2,cy-hd/2-10,"hex "+p.hex,10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.hd,height:p.hh,name:"head"},
+  {op:"create_sketch",on:{face:{of_feature:"head",facing:"+z"}},name:"ss"},
+  {op:"draw_circle",sketch:"ss",diameter:p.M,at:"center"},
+  {op:"extrude",sketch:"ss",depth:p.L,name:"shank"},
+  {op:"hole",diameter:p.hex*1.08,through:false,depth:p.hh*0.6,on:{face:{of_feature:"head",facing:"-z"}},at:"center"},
+  {op:"chamfer",distance:p.M*0.1,edges:{select:"top_loop",of_feature:"shank"}},
+  {op:"save_part",path:"shcs_bolt.SLDPRT"}]};}},
+
+{id:"slideguide",code:"K-08",grp:"mach",
+ name:{ar:"دليل انزلاق U",en:"U slide guide"},
+ icon:'<path d="M4 7 h20 v12 h-5 v-7 h-10 v7 h-5 z"/>',
+ params:[F("L","الطول L","Length L",120),F("W","العرض الكلي W","Overall W",40,4),F("H","الارتفاع H","Height H",20,3),F("cw","عرض المجرى cw","Channel w cw",22,2),F("cd","عمق المجرى cd","Channel d cd",12,1),F("d","ثقوب التثبيت d","Mount holes d",6)],
+ draw(g,p){const s=fit(p.W*2.4,p.H,320,220),W=p.W*s,H=p.H*s,cw=p.cw*s,cd=p.cd*s,x=170,y=170;
+  path(g,`M${x} ${y+H} v${-H} h${(W-cw)/2} v${cd} h${cw} v${-cd} h${(W-cw)/2} v${H} z`);
+  dimH(g,x,x+W,y+H+28,p.W);dimH(g,x+(W-cw)/2,x+(W+cw)/2,y-16,p.cw);
+  dimV(g,y,y+cd,x+W+34,p.cd);dimV(g,y,y+H,x-32,p.H);
+  const sx=x+W+84;rect(g,sx,y,p.L*s*0.4,H);
+  circ(g,sx+p.L*s*0.4*0.25,y+H/2,p.d*s/2);circ(g,sx+p.L*s*0.4*0.75,y+H/2,p.d*s/2);
+  txt(g,sx+p.L*s*0.2,y-12,"L="+p.L+" · 2× "+dia(p.d),10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.H,name:"block"},
+  {op:"create_sketch",on:{face:{of_feature:"block",facing:"+z"}},name:"ch"},
+  {op:"draw_rectangle",sketch:"ch",width:p.L,height:p.cw,at:{u:0,v:(p.W-p.cw)/2}},
+  {op:"cut",sketch:"ch",depth:p.cd,name:"channel"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"block",facing:"+z"}},at:{u:p.L*0.15,v:p.W*0.12}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"block",facing:"+z"}},at:{u:p.L*0.85,v:p.W*0.12}},
+  {op:"save_part",path:"slide_guide.SLDPRT"}]};}},
+
+{id:"gearblank",code:"G-01",grp:"mach",
+ name:{ar:"ترس مبسّط (بدون أسنان دقيقة)",en:"Gear blank (simplified)"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="2.5"/><path d="M14 4 v-2 M23 13 h2 M14 22 v2 M5 13 h-2 M20.4 6.6 l1.4-1.4 M20.4 19.4 l1.4 1.4 M7.6 6.6 l-1.4-1.4 M7.6 19.4 l-1.4 1.4"/>',
+ params:[F("D","قطر الترس D","Gear dia D",80,6),F("W","العرض W","Face width W",15),F("b","قطر التجويف b","Bore b",20),F("hd","قطر الصُرّة hd","Hub dia hd",36),F("hw","طول الصُرّة hw","Hub len hw",12),F("kw","عرض الخابور kw","Key w kw",6,1),F("kd","عمق الخابور kd","Key d kd",2.8,0.5)],
+ draw(g,p){const s=fit(p.D*1.8,p.D,400,300),R=p.D*s/2,cx=230,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,R-6,"4 4");circ(g,cx,cy,p.hd*s/2);
+  const br=p.b*s/2,kw=p.kw*s,kd=p.kd*s;
+  path(g,`M${cx-kw/2} ${cy-br} v${-kd} h${kw} v${kd}`);circ(g,cx,cy,br);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.D));txt(g,cx,cy+br+16,dia(p.b)+" + "+p.kw+"×"+p.kd+" key",10);
+  txt(g,cx,cy-R+18,"pitch \u2248 dashed",9,"var(--dim)");
+  const sx=cx+R+60,w=p.W*s,hw=p.hw*s,hR=p.hd*s/2;
+  path(g,`M${sx} ${cy-R} h${w} v${R-hR} h${hw} v${2*hR} h${-hw} v${R-hR} h${-w} z`);
+  thin(g,sx,cy-br,sx+w+hw,cy-br);thin(g,sx,cy+br,sx+w+hw,cy+br);axis(g,sx,sx+w+hw,cy);
+  dimH(g,sx,sx+w,cy+R+32,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D,height:p.W,name:"rim"},
+  {op:"create_sketch",on:{face:{of_feature:"rim",facing:"+z"}},name:"hs"},
+  {op:"draw_circle",sketch:"hs",diameter:p.hd,at:"center"},
+  {op:"extrude",sketch:"hs",depth:p.hw,name:"hub"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"hub",facing:"+z"}},at:"center"},
+  {op:"create_plane",offset_from:"top",distance:p.b/2,name:"kp"},
+  {op:"create_sketch",on:{plane:"kp"},name:"ks"},
+  {op:"draw_rectangle",sketch:"ks",width:p.W+p.hw,height:p.kw,at:{u:0,v:-p.kw/2}},
+  {op:"cut",sketch:"ks",depth:p.kd,name:"keyway"},
+  {op:"save_part",path:"gear_blank.SLDPRT"}]};}},
+
+{id:"sprocket",code:"G-02",grp:"mach",
+ name:{ar:"سبروكت مبسّط",en:"Sprocket (simplified)"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="2.5"/><circle cx="14" cy="5.5" r="1"/><circle cx="21" cy="9" r="1"/><circle cx="21" cy="17" r="1"/><circle cx="14" cy="20.5" r="1"/><circle cx="7" cy="17" r="1"/><circle cx="7" cy="9" r="1"/>',
+ params:[F("D","القطر الخارجي D","Outer dia D",90,6),F("W","العرض W","Width W",10),F("b","قطر التجويف b","Bore b",18),F("N","عدد الأسنان N","Teeth N",12,4),F("rd","قطر تجويف السن rd","Root notch rd",8,2)],
+ draw(g,p){const s=fit(p.D*1.8,p.D,400,300),R=p.D*s/2,cx=230,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R);
+  for(let i=0;i<p.N;i++){const a=i*2*Math.PI/p.N;
+   circ(g,cx+Math.cos(a)*R,cy+Math.sin(a)*R,p.rd*s/2);}
+  circ(g,cx,cy,R,"0");
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.D));txt(g,cx,cy+4,dia(p.b),11);
+  txt(g,cx,cy-R-14,p.N+"× root "+dia(p.rd),10);
+  const sx=cx+R+64,w=Math.max(p.W*s,9);rect(g,sx,cy-R,w,2*R);dimH(g,sx,sx+w,cy+R+32,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D,height:p.W,name:"disc"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"disc",facing:"+z"}},at:"center"},
+  {op:"hole",diameter:p.rd,through:true,on:{face:{of_feature:"disc",facing:"+z"}},at:{r:p.D/2,theta_deg:0},name:"root"},
+  {op:"circular_pattern",of_feature:"root",count:p.N,equal_spacing:true},
+  {op:"save_part",path:"sprocket.SLDPRT"}]};}},
+
+{id:"conrod",code:"G-03",grp:"mach",
+ name:{ar:"ذراع توصيل مبسّط",en:"Connecting rod (simplified)"},
+ icon:'<circle cx="6" cy="13" r="3.4"/><circle cx="22" cy="13" r="2.4"/><path d="M8.5 11.5 h11 M8.5 14.5 h11"/>',
+ params:[F("C","المسافة المركزية C","Center dist C",90,6),F("BD","القطر الكبير BD","Big end dia BD",34,4),F("bd","القطر الصغير bd","Small end dia bd",20,3),F("Bb","تجويف الكبير Bb","Big bore Bb",20),F("sb","تجويف الصغير sb","Small bore sb",10),F("w","عرض الجسم w","Beam width w",14,2),F("T","السماكة T","Thickness T",10)],
+ draw(g,p){const s=fit(p.C+p.BD/2+p.bd/2,p.BD,380,180),x=140,cy=195;
+  const C=p.C*s,BR=p.BD*s/2,br=p.bd*s/2,w=p.w*s;
+  const x1=x+BR,x2=x1+C;
+  circ(g,x1,cy,BR);circ(g,x1,cy,p.Bb*s/2);center(g,x1,cy,BR);
+  circ(g,x2,cy,br);circ(g,x2,cy,p.sb*s/2);center(g,x2,cy,br);
+  line(g,x1+BR*0.7,cy-w/2,x2-br*0.7,cy-w/2);line(g,x1+BR*0.7,cy+w/2,x2-br*0.7,cy+w/2);
+  dimH(g,x1,x2,cy+BR+32,"C = "+p.C);
+  txt(g,x1,cy-BR-10,dia(p.BD)+"/"+dia(p.Bb),10);txt(g,x2,cy-br-10,dia(p.bd)+"/"+dia(p.sb),10);
+  txt(g,(x1+x2)/2,cy-w/2-8,"w="+p.w,10);
+  const sx=x2+br+60,t=Math.max(p.T*s,9);rect(g,sx,cy-BR,t,2*BR);dimH(g,sx,sx+t,cy+BR+32,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.BD,height:p.T,name:"bigend"},
+  {op:"create_sketch",on:{face:{of_feature:"bigend",facing:"-z"}},name:"beam"},
+  {op:"draw_rectangle",sketch:"beam",width:p.C,height:p.w,at:{u:0,v:-p.w/2}},
+  {op:"extrude",sketch:"beam",depth:p.T,name:"shank"},
+  {op:"create_sketch",on:{face:{of_feature:"bigend",facing:"-z"}},name:"se"},
+  {op:"draw_circle",sketch:"se",diameter:p.bd,at:{u:p.C,v:0}},
+  {op:"extrude",sketch:"se",depth:p.T,name:"smallend"},
+  {op:"hole",diameter:p.Bb,through:true,on:{face:{of_feature:"bigend",facing:"+z"}},at:"center"},
+  {op:"hole",diameter:p.sb,through:true,on:{face:{of_feature:"smallend",facing:"+z"}},at:{u:p.C,v:0}},
+  {op:"save_part",path:"conrod.SLDPRT"}]};}},
+];
+window.__PARTS.push(...MORE2);
+/* ═══════════ BATCH 3 — محرّك وخدمة + توسعة (12) ═══════════ */
+const MORE3=[
+{id:"valvecover",code:"E-01",grp:"mill",
+ name:{ar:"غطاء بفلنجة مثقوبة",en:"Flanged cover (valve-cover style)"},
+ icon:'<rect x="3" y="8" width="22" height="11" rx="2"/><rect x="7" y="5" width="14" height="6" rx="2"/><circle cx="6" cy="15" r="1"/><circle cx="14" cy="16.5" r="1"/><circle cx="22" cy="15" r="1"/>',
+ params:[F("L","طول الفلنجة L","Flange L",180),F("W","عرض الفلنجة W","Flange W",90),F("T","سماكة الفلنجة T","Flange T",6),F("cl","طول القبة cl","Dome L",150,4),F("cw","عرض القبة cw","Dome W",60,4),F("ch","ارتفاع القبة ch","Dome H",30,2),F("n","ثقوب المحيط n","Perimeter holes n",8,4),F("d","قطر الثقب d","Hole dia d",7)],
+ draw(g,p){const s=fit(p.L,p.W,320,180),w=p.L*s,h=p.W*s,x=115,y=95;
+  rect(g,x,y,w,h);rect(g,x+(w-p.cl*s)/2,y+(h-p.cw*s)/2,p.cl*s,p.cw*s);
+  const per=[[.12,.5],[.3,.12],[.5,.1],[.7,.12],[.88,.5],[.7,.88],[.5,.9],[.3,.88]];
+  for(let i=0;i<Math.min(p.n,8);i++)circ(g,x+per[i][0]*w,y+per[i][1]*h,p.d*s/2);
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  txt(g,x+w/2,y-14,p.n+"× "+dia(p.d),11);
+  const sy=y+h+58,ch=p.ch*s,t=Math.max(p.T*s,6);
+  path(g,`M${x} ${sy+ch+t} v${-t} h${(w-p.cl*s)/2} v${-ch} h${p.cl*s} v${ch} h${(w-p.cl*s)/2} v${t} z`);
+  dimV(g,sy,sy+ch+t,x+w+40,(p.ch+p.T).toFixed(0));},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"flange"},
+  {op:"create_sketch",on:{face:{of_feature:"flange",facing:"+z"}},name:"dome"},
+  {op:"draw_rectangle",sketch:"dome",width:p.cl,height:p.cw,at:{u:(p.L-p.cl)/2,v:(p.W-p.cw)/2}},
+  {op:"extrude",sketch:"dome",depth:p.ch,name:"cap"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"flange",facing:"+z"}},at:{u:p.L*0.08,v:p.W/2},name:"seed"},
+  {op:"circular_pattern",of_feature:"seed",count:p.n,equal_spacing:true},
+  {op:"save_part",path:"flanged_cover.SLDPRT"}]};}},
+
+{id:"toothpulley",code:"E-02",grp:"lathe",
+ name:{ar:"بكرة مسننة (شكلياً)",en:"Timing pulley (visual teeth)"},
+ icon:'<circle cx="14" cy="13" r="9.5"/><circle cx="14" cy="13" r="2.5"/><path d="M14 3.5 v2 M24.5 13 h-2 M14 22.5 v-2 M3.5 13 h2 M21.4 5.6 l-1.4 1.4 M21.4 20.4 l-1.4-1.4 M6.6 5.6 l1.4 1.4 M6.6 20.4 l1.4-1.4"/>',
+ params:[F("D","القطر D","Diameter D",60,5),F("W","العرض W","Width W",16),F("b","التجويف b","Bore b",12),F("N","عدد الأسنان N","Teeth N",20,6),F("td","عمق السن td","Tooth depth td",2.5,0.5)],
+ draw(g,p){const s=fit(p.D*1.9,p.D,400,300),R=p.D*s/2,cx=225,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,R-p.td*s,"3 3");circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R);
+  for(let i=0;i<p.N;i++){const a=i*2*Math.PI/p.N;
+   line(g,cx+Math.cos(a)*(R-p.td*s),cy+Math.sin(a)*(R-p.td*s),cx+Math.cos(a)*R,cy+Math.sin(a)*R);}
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.D));txt(g,cx,cy+4,dia(p.b),11);
+  txt(g,cx,cy-R-12,p.N+"T × "+p.td+" deep",10);
+  const sx=cx+R+64,w=Math.max(p.W*s,10);rect(g,sx,cy-R,w,2*R);dimH(g,sx,sx+w,cy+R+32,p.W);},
+ json(p){const cmds=[
+  {op:"create_cylinder",diameter:p.D,height:p.W,name:"disc"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"disc",facing:"+z"}},at:"center"},
+  {op:"create_plane",offset_from:"right",distance:p.D/2,name:"tp"},
+  {op:"create_sketch",on:{plane:"tp"},name:"ts"},
+  {op:"draw_rectangle",sketch:"ts",width:(Math.PI*p.D/p.N)*0.45,height:p.W,at:{u:-(Math.PI*p.D/p.N)*0.225,v:0}},
+  {op:"cut",sketch:"ts",depth:p.td,name:"tooth_seed"},
+  {op:"circular_pattern",of_feature:"tooth_seed",count:p.N,equal_spacing:true},
+  {op:"save_part",path:"timing_pulley.SLDPRT"}];
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+
+{id:"drainplug",code:"E-03",grp:"lathe",
+ name:{ar:"سدادة زيت برأس مربع",en:"Drain plug, square head"},
+ icon:'<rect x="9" y="5" width="10" height="6"/><rect x="11" y="11" width="6" height="10"/>',
+ params:[F("M","القلاووظ M","Thread M",14,4),F("L","طول الساق L","Shank L",12,3),F("sq","ضلع الرأس sq","Head square sq",12,4),F("sh","ارتفاع الرأس sh","Head ht sh",8,2)],
+ draw(g,p){const s=fit(p.sq*2.4,p.L+p.sh,260,220),x=205,y=140;
+  const sq=p.sq*s,sh=p.sh*s,L=p.L*s,d=p.M*s;
+  rect(g,x,y,sq,sh);rect(g,x+(sq-d)/2,y+sh,d,L);
+  thin(g,x+sq/2,y-12,x+sq/2,y+sh+L+12);
+  dimH(g,x,x+sq,y-16,p.sq);dimV(g,y,y+sh,x-30,p.sh);
+  dimV(g,y+sh,y+sh+L,x+sq+34,p.L);txt(g,x+sq/2+d/2+22,y+sh+L/2,"M"+p.M,11,"var(--signal)","start");
+  const cx2=x+sq/2,cy2=y+sh+L+70;
+  rect(g,cx2-sq/2,cy2-sq/2,sq,sq);circ(g,cx2,cy2,d/2);center(g,cx2,cy2,sq/2);},
+ json(p){const R=p.sq/2;return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.sq,height:p.sq,thickness:p.sh,name:"head"},
+  {op:"create_sketch",on:{face:{of_feature:"head",facing:"+z"}},name:"ss"},
+  {op:"draw_circle",sketch:"ss",diameter:p.M,at:{u:R,v:R}},
+  {op:"extrude",sketch:"ss",depth:p.L,name:"shank"},
+  {op:"chamfer",distance:p.M*0.1,edges:{select:"top_loop",of_feature:"shank"}},
+  {op:"save_part",path:"drain_plug.SLDPRT"}]};}},
+
+{id:"dowel",code:"E-04",grp:"lathe",
+ name:{ar:"دسر (Dowel) بشطفتين",en:"Dowel pin, double chamfer"},
+ icon:'<rect x="6" y="10" width="16" height="6" rx="1"/>',
+ params:[F("d","القطر d","Diameter d",8,1),F("L","الطول L","Length L",30,3),F("c","الشطفة c","Chamfer c",0.8,0.1)],
+ draw(g,p){const s=fit(p.L,p.d,300,90),x=200,cy=195;
+  const L=p.L*s,d=p.d*s,c=p.c*s;
+  path(g,`M${x+c} ${cy-d/2} h${L-2*c} l${c} ${c} v${d-2*c} l${-c} ${c} h${-(L-2*c)} l${-c} ${-c} v${-(d-2*c)} z`);
+  axis(g,x,x+L,cy);
+  dimH(g,x,x+L,cy+d/2+28,p.L);dimV(g,cy-d/2,cy+d/2,x-30,dia(p.d));
+  txt(g,x+14,cy-d/2-10,"C"+p.c+" ×2",10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.d,height:p.L,name:"pin"},
+  {op:"chamfer",distance:p.c,edges:{select:"top_loop",of_feature:"pin"}},
+  {op:"chamfer",distance:p.c,edges:{select:"bottom_loop",of_feature:"pin"}},
+  {op:"save_part",path:"dowel_pin.SLDPRT"}]};}},
+
+{id:"locring",code:"E-05",grp:"lathe",
+ name:{ar:"حلقة توسيط",en:"Locating ring"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="6"/><circle cx="14" cy="13" r="3"/>',
+ params:[F("OD","الخارجي OD","Outer OD",50,4),F("PD","قطر التوسيط PD","Pilot dia PD",36),F("ID","الداخلي ID","Inner ID",25),F("T","السماكة T","Thickness T",8),F("pt","ارتفاع التوسيط pt","Pilot ht pt",4,0.5)],
+ draw(g,p){const s=fit(p.OD*2.4,p.OD,340,300),R=p.OD*s/2,cx=215,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.PD*s/2);circ(g,cx,cy,p.ID*s/2);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.OD));txt(g,cx,cy-p.PD*s/2-8,dia(p.PD),10);txt(g,cx,cy+4,dia(p.ID),10);
+  const sx=cx+R+70,t=p.T*s,pt=p.pt*s,pR=p.PD*s/2,iR=p.ID*s/2;
+  path(g,`M${sx} ${cy-R} h${t} v${R-pR} h${pt} v${pR-iR} h${-pt-t+t} m0 0`);
+  path(g,`M${sx} ${cy-R} h${t} v${R-pR} h${pt} v${2*pR} h${-pt} v${R-pR} h${-t} z`);
+  thin(g,sx,cy-iR,sx+t+pt,cy-iR);thin(g,sx,cy+iR,sx+t+pt,cy+iR);axis(g,sx,sx+t+pt,cy);
+  dimH(g,sx,sx+t,cy+R+32,p.T);dimH(g,sx+t,sx+t+pt,cy+R+32,p.pt);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.T,name:"ring"},
+  {op:"create_sketch",on:{face:{of_feature:"ring",facing:"+z"}},name:"ps"},
+  {op:"draw_circle",sketch:"ps",diameter:p.PD,at:"center"},
+  {op:"extrude",sketch:"ps",depth:p.pt,name:"pilot"},
+  {op:"hole",diameter:p.ID,through:true,on:{face:{of_feature:"pilot",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"locating_ring.SLDPRT"}]};}},
+
+{id:"tappet",code:"E-06",grp:"lathe",
+ name:{ar:"رافعة صمام مبسطة",en:"Tappet / lifter (simplified)"},
+ icon:'<rect x="11" y="4" width="6" height="12"/><rect x="7" y="16" width="14" height="5" rx="1"/>',
+ params:[F("d","قطر الساق d","Stem dia d",10,2),F("L","طول الساق L","Stem L",35),F("fd","قطر القاعدة fd","Foot dia fd",24),F("ft","سماكة القاعدة ft","Foot thk ft",6,1)],
+ draw(g,p){const s=fit(p.fd*2,p.L+p.ft,300,240),cx=225,yb=330;
+  const d=p.d*s,L=p.L*s,fd=p.fd*s,ft=p.ft*s;
+  rect(g,cx-fd/2,yb-ft,fd,ft);rect(g,cx-d/2,yb-ft-L,d,L);
+  thin(g,cx,yb-ft-L-12,cx,yb+12);
+  dimV(g,yb-ft-L,yb-ft,cx-fd/2-30,p.L);dimV(g,yb-ft,yb,cx+fd/2+32,p.ft);
+  dimH(g,cx-d/2,cx+d/2,yb-ft-L-16,dia(p.d));dimH(g,cx-fd/2,cx+fd/2,yb+26,dia(p.fd));},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.fd,height:p.ft,name:"foot"},
+  {op:"create_sketch",on:{face:{of_feature:"foot",facing:"+z"}},name:"ss"},
+  {op:"draw_circle",sketch:"ss",diameter:p.d,at:"center"},
+  {op:"extrude",sketch:"ss",depth:p.L,name:"stem"},
+  {op:"chamfer",distance:0.5,edges:{select:"top_loop",of_feature:"stem"}},
+  {op:"save_part",path:"tappet.SLDPRT"}]};}},
+
+{id:"gasket",code:"E-07",grp:"mill",
+ name:{ar:"جوان مسطح",en:"Flat gasket"},
+ icon:'<rect x="3" y="6" width="22" height="14" rx="3"/><rect x="8" y="10" width="12" height="6" rx="2"/><circle cx="6" cy="8.5" r="0.9"/><circle cx="22" cy="8.5" r="0.9"/><circle cx="6" cy="17.5" r="0.9"/><circle cx="22" cy="17.5" r="0.9"/>',
+ params:[F("L","الطول L","Length L",150),F("W","العرض W","Width W",90),F("T","السماكة T","Thickness T",1.5,0.2),F("cw","فتحة الوسط cw","Window w",100,4),F("ch","فتحة الوسط ch","Window h",50,4),F("d","ثقوب البراغي d","Bolt holes d",8),F("m","إزاحة الثقوب","Hole margin",12,3)],
+ draw(g,p){const s=fit(p.L,p.W,330,200),w=p.L*s,h=p.W*s,x=115,y=110,m=p.m*s;
+  rect(g,x,y,w,h);rect(g,x+(w-p.cw*s)/2,y+(h-p.ch*s)/2,p.cw*s,p.ch*s);
+  [[x+m,y+m],[x+w-m,y+m],[x+m,y+h-m],[x+w-m,y+h-m]].forEach(([cx,cy])=>circ(g,cx,cy,p.d*s/2));
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+40,p.W);
+  dimH(g,x+(w-p.cw*s)/2,x+(w+p.cw*s)/2,y+(h-p.ch*s)/2-12,p.cw);
+  txt(g,x+w/2,y+h+52,"T = "+p.T+" mm  ·  4× "+dia(p.d),11);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"gasket"},
+  {op:"add_corner_holes",diameter:p.d,margin:p.m,of_feature:"gasket"},
+  {op:"create_sketch",on:{face:{of_feature:"gasket",facing:"+z"}},name:"win"},
+  {op:"draw_rectangle",sketch:"win",width:p.cw,height:p.ch,at:{u:(p.L-p.cw)/2,v:(p.W-p.ch)/2}},
+  {op:"cut",sketch:"win",through:true,name:"window"},
+  {op:"save_part",path:"gasket.SLDPRT"}]};}},
+
+{id:"taperplug",code:"L-15",grp:"lathe",
+ name:{ar:"مخروط توسيط (درجات)",en:"Stepped centering cone"},
+ icon:'<path d="M6 18 h16 v-3 h-4 v-3 h-4 v-3 h-4 v-3 h-4 z"/>',
+ params:[F("D1","أكبر قطر D1","Max dia D1",40,4),F("D2","قطر 2","Dia 2",30),F("D3","قطر 3","Dia 3",20),F("D4","أصغر قطر D4","Min dia D4",10),F("st","سماكة الدرجة st","Step thk st",6,1)],
+ draw(g,p){const s=fit(p.D1*2,p.st*4,300,220),cx=215,yb=310;
+  const ds=[p.D1,p.D2,p.D3,p.D4].map(d=>d*s),st=p.st*s;
+  let y=yb;ds.forEach((d)=>{rect(g,cx-d/2,y-st,d,st);y-=st;});
+  thin(g,cx,yb-4*st-12,cx,yb+12);
+  dimH(g,cx-ds[0]/2,cx+ds[0]/2,yb+26,dia(p.D1));
+  dimH(g,cx-ds[3]/2,cx+ds[3]/2,yb-4*st-16,dia(p.D4));
+  dimV(g,yb-st,yb,cx+ds[0]/2+32,p.st);
+  txt(g,cx-ds[0]/2-40,yb-2*st,dia(p.D2),10);txt(g,cx-ds[0]/2-40,yb-3*st+6,dia(p.D3),10);},
+ json(p){const cmds=[{op:"create_cylinder",diameter:p.D1,height:p.st,name:"c1"}];
+  [p.D2,p.D3,p.D4].forEach((D,i)=>{cmds.push(
+   {op:"create_sketch",on:{face:{of_feature:"c"+(i+1),facing:"+z"}},name:"cs"+(i+2)},
+   {op:"draw_circle",sketch:"cs"+(i+2),diameter:D,at:"center"},
+   {op:"extrude",sketch:"cs"+(i+2),depth:p.st,name:"c"+(i+2)});});
+  cmds.push({op:"save_part",path:"step_cone.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+
+{id:"ringnut",code:"K-09",grp:"mach",
+ name:{ar:"صامولة دائرية بثقوب",en:"Round nut, spanner holes"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="4"/><circle cx="14" cy="6" r="1"/><circle cx="21" cy="13" r="1"/><circle cx="14" cy="20" r="1"/><circle cx="7" cy="13" r="1"/>',
+ params:[F("OD","الخارجي OD","Outer OD",45,4),F("M","القلاووظ M","Thread M",24,4),F("T","السماكة T","Thickness T",10),F("n","ثقوب المفتاح n","Spanner holes n",4,2),F("sd","قطرها sd","Their dia sd",4,1)],
+ draw(g,p){const s=fit(p.OD*2.4,p.OD,340,300),R=p.OD*s/2,cx=215,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.M*s/2*0.85,"3 3");circ(g,cx,cy,p.M*s/2*0.55);center(g,cx,cy,R);
+  const pr=(p.OD/2+p.M/2)/2*s;
+  for(let i=0;i<p.n;i++){const a=i*2*Math.PI/p.n;circ(g,cx+Math.cos(a)*pr,cy+Math.sin(a)*pr,p.sd*s/2);}
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.OD));txt(g,cx,cy+4,"M"+p.M,11);
+  txt(g,cx,cy-R-12,p.n+"× "+dia(p.sd)+" spanner",10);
+  const sx=cx+R+70,t=Math.max(p.T*s,10);rect(g,sx,cy-R,t,2*R);dimH(g,sx,sx+t,cy+R+32,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.T,name:"nut"},
+  {op:"hole",diameter:p.M*0.85,through:true,on:{face:{of_feature:"nut",facing:"+z"}},at:"center"},
+  {op:"hole",diameter:p.sd,through:false,depth:p.T*0.6,on:{face:{of_feature:"nut",facing:"+z"}},at:{r:(p.OD/2+p.M/2)/2/1,theta_deg:0},name:"sp"},
+  {op:"circular_pattern",of_feature:"sp",count:p.n,equal_spacing:true},
+  {op:"save_part",path:"ring_nut.SLDPRT"}]};}},
+
+{id:"eyeplate",code:"K-10",grp:"mach",
+ name:{ar:"لوحة عين رفع",en:"Lifting eye plate"},
+ icon:'<circle cx="14" cy="9" r="5"/><circle cx="14" cy="9" r="2.2"/><rect x="6" y="14" width="16" height="7" rx="1"/><circle cx="9.5" cy="17.5" r="1.1"/><circle cx="18.5" cy="17.5" r="1.1"/>',
+ params:[F("bw","عرض القاعدة bw","Base w bw",70,4),F("bh","عمق القاعدة bh","Base d bh",40,3),F("T","السماكة T","Thickness T",10),F("R","نصف قطر العين R","Eye radius R",22,4),F("ed","قطر ثقب العين ed","Eye hole ed",20),F("d","ثقوب القاعدة d","Base holes d",9)],
+ draw(g,p){const s=fit(p.bw,p.R*2+p.bh,260,240)*0.95,cx=225,yb=320;
+  const bw=p.bw*s,bh=30,T=p.T,R=p.R*s,ed=p.ed*s;
+  rect(g,cx-bw/2,yb-bh,bw,bh);
+  path(g,`M${cx-R} ${yb-bh} a${R} ${R} 0 1 1 ${2*R} 0 z`);
+  circ(g,cx,yb-bh-R+R- R,0);
+  circ(g,cx,yb-bh-R,ed/2);center(g,cx,yb-bh-R,ed/2);
+  circ(g,cx-bw*0.3,yb-bh/2,p.d*s/2);circ(g,cx+bw*0.3,yb-bh/2,p.d*s/2);
+  dimH(g,cx-bw/2,cx+bw/2,yb+26,p.bw);
+  txt(g,cx,yb-bh-R+4,dia(p.ed),10);txt(g,cx+R+34,yb-bh-R,"R"+p.R,11,"var(--signal)","start");
+  txt(g,cx,yb-bh-2*R-14,"T="+p.T,10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.bw,height:p.bh,thickness:p.T,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+y"}},name:"eye"},
+  {op:"draw_circle",sketch:"eye",diameter:p.R*2,at:{u:p.bw/2,v:0}},
+  {op:"extrude",sketch:"eye",depth:p.T,name:"ring"},
+  {op:"hole",diameter:p.ed,through:true,on:{face:{of_feature:"ring",facing:"+y"}},at:{u:p.bw/2,v:0}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"base",facing:"+z"}},at:{u:p.bw*0.2,v:p.bh/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"base",facing:"+z"}},at:{u:p.bw*0.8,v:p.bh/2}},
+  {op:"save_part",path:"eye_plate.SLDPRT"}]};}},
+
+{id:"vblock",code:"F-04",grp:"fix",
+ name:{ar:"بلوك V",en:"V-block"},
+ icon:'<path d="M4 6 h20 v15 h-20 z M9 6 l5 6 l5 -6"/>',
+ params:[F("L","الطول L","Length L",80,4),F("W","العرض W","Width W",50,4),F("H","الارتفاع H","Height H",40,4),F("vw","فتحة V العليا vw","V opening vw",34,4),F("vd","عمق V vd","V depth vd",18,2)],
+ draw(g,p){const s=fit(p.W*2.2,p.H,330,230),W=p.W*s,H=p.H*s,vw=p.vw*s,vd=p.vd*s,x=150,yt=110;
+  path(g,`M${x} ${yt} h${(W-vw)/2} l${vw/2} ${vd} l${vw/2} ${-vd} h${(W-vw)/2} v${H} h${-W} z`);
+  dimH(g,x,x+W,yt+H+28,p.W);dimV(g,yt,yt+H,x-32,p.H);
+  dimH(g,x+(W-vw)/2,x+(W+vw)/2,yt-16,p.vw);dimV(g,yt,yt+vd,x+W+34,p.vd);
+  txt(g,x+W/2,yt+vd+18,"90° V",10,"var(--dim)");
+  const sx=x+W+84;rect(g,sx,yt,p.L*s*0.5,H);dimH(g,sx,sx+p.L*s*0.5,yt+H+28,p.L);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.H,name:"block"},
+  {op:"create_plane",offset_from:"top",distance:0,name:"topZero"},
+  {op:"create_sketch",on:{face:{of_feature:"block",facing:"+y"}},name:"vs"},
+  {op:"draw_rectangle",sketch:"vs",width:p.vw,height:p.vd,at:{u:(p.W-p.vw)/2,v:p.H-p.vd}},
+  {op:"cut",sketch:"vs",through:true,name:"vslot_rough"},
+  {op:"chamfer",distance:p.vw/2,edges:{select:"top_loop",of_feature:"vslot_rough"}},
+  {op:"save_part",path:"v_block.SLDPRT"}]};}},
+
+{id:"anglepl",code:"F-05",grp:"fix",
+ name:{ar:"لوحة زاوية تثبيت",en:"Angle plate"},
+ icon:'<path d="M5 4 v18 h18 v-5 h-13 v-13 z"/><circle cx="9" cy="8" r="1.1"/><circle cx="9" cy="14" r="1.1"/><circle cx="16" cy="19.5" r="1.1"/>',
+ params:[F("A","الوجه القائم A","Vertical A",100),F("B","القاعدة B","Base B",80),F("W","العرض W","Width W",60),F("T","السماكة T","Thickness T",12),F("d","قطر الثقوب d","Hole dia d",9),F("n","ثقوب الوجه n","Face holes n",2,1)],
+ draw(g,p){const s=fit(Math.max(p.A,p.B)*1.8,Math.max(p.A,p.B),380,260),a=p.A*s,b=p.B*s,t=p.T*s,x=145,y=95,r=p.d*s/2;
+  path(g,`M${x} ${y} h${t} v${a-t} h${b-t} v${t} h${-b} z`);
+  for(let i=0;i<p.n;i++){const hy=y+a*(0.22+0.5*i/Math.max(p.n-1,1));circ(g,x+t/2,hy,r);center(g,x+t/2,hy,r);}
+  circ(g,x+b*0.6,y+a-t/2,r);center(g,x+b*0.6,y+a-t/2,r);
+  dimV(g,y,y+a,x-32,p.A);dimH(g,x,x+b,y+a+30,p.B);dimH(g,x,x+t,y-16,p.T);
+  txt(g,x+t+30,y+a*0.22,p.n+"× "+dia(p.d),10,"var(--signal)","start");
+  const sx=x+b+80;rect(g,sx,y,p.W*s,a);dimH(g,sx,sx+p.W*s,y+a+30,p.W);},
+ json(p){const cmds=[
+  {op:"create_plate",width:p.B,height:p.W,thickness:p.T,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"fs"},
+  {op:"draw_rectangle",sketch:"fs",width:p.T,height:p.W,at:{u:0,v:0}},
+  {op:"extrude",sketch:"fs",depth:p.A-p.T,name:"face"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"base",facing:"+z"}},at:{u:p.B*0.6,v:p.W/2}}];
+  for(let i=0;i<p.n;i++)cmds.push({op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"face",facing:"+x"}},at:{u:p.A*(0.22+0.5*i/Math.max(p.n-1,1)),v:p.W/2}});
+  cmds.push({op:"save_part",path:"angle_plate.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+];
+window.__PARTS.push(...MORE3);
+/* ═══════════ BATCH 4 — توسعة المكتبة (14) ═══════════ */
+const MORE4=[
+{id:"keyshaft",code:"L-16",grp:"lathe",
+ name:{ar:"عمود بخابور طرفي",en:"Shaft, end keyway"},
+ icon:'<rect x="3" y="10" width="22" height="7"/><rect x="16" y="10" width="6" height="2.4"/>',
+ params:[F("D","القطر D","Diameter D",25,4),F("L","الطول L","Length L",90),F("kw","عرض الخابور kw","Key w kw",8,2),F("kd","عمق الخابور kd","Key depth kd",4,1),F("kl","طول الخابور kl","Key len kl",30,4)],
+ draw(g,p){const s=fit(p.L,p.D,380,120),L=p.L*s,D=p.D*s,x=150,cy=200,kw=p.kw*s,kd=p.kd*s,kl=p.kl*s;
+  rect(g,x,cy-D/2,L,D);axis(g,x,x+L,cy);
+  rect(g,x+L-kl-4,cy-D/2,kl,kd);
+  dimH(g,x,x+L,cy+D/2+30,p.L);dimV(g,cy-D/2,cy+D/2,x-32,dia(p.D));
+  dimH(g,x+L-kl-4,x+L-4,cy-D/2-18,p.kl);txt(g,x+L-kl,cy-D/2-32,p.kw+"×"+p.kd+" key",10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D,height:p.L,name:"shaft"},
+  {op:"create_plane",offset_from:"top",distance:p.D/2-p.kd,name:"kp"},
+  {op:"create_sketch",on:{plane:"kp"},name:"ks"},
+  {op:"draw_rectangle",sketch:"ks",width:p.kl,height:p.kw,at:{u:p.L-p.kl-4,v:-p.kw/2}},
+  {op:"cut",sketch:"ks",depth:p.kd,name:"keyway"},
+  {op:"save_part",path:"key_shaft.SLDPRT"}]};}},
+
+{id:"cupwasher",code:"L-17",grp:"lathe",
+ name:{ar:"وردة مخروطية (Belleville)",en:"Conical washer"},
+ icon:'<path d="M4 16 l6 -6 h8 l6 6" /><circle cx="14" cy="13" r="3" fill="none"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",40,4),F("ID","القطر الداخلي ID","Inner dia ID",20),F("T","السماكة T","Thickness T",2,0.3),F("h","الارتفاع المخروطي h","Cone height h",4,0.5)],
+ draw(g,p){const s=fit(p.OD*1.6,p.OD,340,260),R=p.OD*s/2,ir=p.ID*s/2,cx=200,cy=180;
+  circ(g,cx,cy,R);circ(g,cx,cy,ir);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+30,dia(p.OD));txt(g,cx,cy+4,dia(p.ID),11);
+  const sx=cx+R+70,t=Math.max(p.T*s,5),h=Math.max(p.h*s,10);
+  path(g,`M${sx} ${cy+h/2} l${(R-ir)} ${-h} h${t} l${-(R-ir)} ${h} z`);
+  path(g,`M${sx} ${cy+h/2} l${-(R-ir)*0} 0`);
+  dimV(g,cy-h/2,cy+h/2,sx+(R-ir)+t+30,p.h);txt(g,sx+8,cy+h/2+18,"T="+p.T,10,"var(--signal)","start");},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cone",outer_diameter:p.OD,inner_diameter:p.ID,height:p.h,wall:p.T,name:"belleville"},
+  {op:"save_part",path:"conical_washer.SLDPRT"}]};}},
+
+{id:"threadstud",code:"K-11",grp:"mach",
+ name:{ar:"عمود مقلوظ (Stud)",en:"Threaded stud"},
+ icon:'<rect x="3" y="11" width="22" height="4"/><path d="M4 11 v4 M7 11 v4 M20 11 v4 M23 11 v4" stroke-width="0.8"/>',
+ params:[F("M","القلاووظ M","Thread M",10,2),F("L","الطول L","Length L",60),F("te","طول القلاووظ te","Thread len te",18,3)],
+ draw(g,p){const s=fit(p.L,p.M*3,380,90),L=p.L*s,d=p.M*s,x=150,cy=200,te=p.te*s;
+  rect(g,x,cy-d/2,L,d);axis(g,x,x+L,cy);
+  for(let gx=x;gx<x+te;gx+=4)thin(g,gx,cy-d/2,gx,cy+d/2);
+  for(let gx=x+L-te;gx<x+L;gx+=4)thin(g,gx,cy-d/2,gx,cy+d/2);
+  dimH(g,x,x+L,cy+d/2+28,p.L);dimH(g,x,x+te,cy-d/2-16,p.te);
+  dimV(g,cy-d/2,cy+d/2,x-30,"M"+p.M);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.M,height:p.L,name:"stud"},
+  {op:"chamfer",distance:p.M*0.1,edges:{select:"top_loop",of_feature:"stud"}},
+  {op:"chamfer",distance:p.M*0.1,edges:{select:"bottom_loop",of_feature:"stud"}},
+  {op:"note",text:"thread M"+p.M+" × "+p.te+"mm both ends"},
+  {op:"save_part",path:"threaded_stud.SLDPRT"}]};}},
+
+{id:"squarenut",code:"K-12",grp:"mach",
+ name:{ar:"صامولة مربعة",en:"Square nut"},
+ icon:'<rect x="5" y="4" width="18" height="18" rx="1"/><circle cx="14" cy="13" r="3.5"/>',
+ params:[F("M","القلاووظ M","Thread M",10,2),F("s","عرض الضلع s","Width s",17,4),F("H","الارتفاع H","Height H",8)],
+ draw(g,p){const sc=fit(p.s*2.3,p.s,300,240),S=p.s*sc,cx=210,cy=200;
+  rect(g,cx-S/2,cy-S/2,S,S);circ(g,cx,cy,p.M*sc/2*0.85,"3 3");circ(g,cx,cy,p.M*sc/2*0.55);
+  center(g,cx,cy,S/2);
+  dimH(g,cx-S/2,cx+S/2,cy+S/2+28,"s="+p.s);txt(g,cx,cy-S/2-12,"M"+p.M,12);
+  const sx=cx+S/2+70,h=Math.max(p.H*sc,12);rect(g,sx,cy-S/2,h,S);dimH(g,sx,sx+h,cy+S/2+28,p.H);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.s,height:p.s,thickness:p.H,name:"blank"},
+  {op:"hole",diameter:p.M*0.85,through:true,on:{face:{of_feature:"blank",facing:"+z"}},at:"center"},
+  {op:"note",text:"tapped M"+p.M},
+  {op:"save_part",path:"square_nut.SLDPRT"}]};}},
+
+{id:"wingnut",code:"K-13",grp:"mach",
+ name:{ar:"صامولة جناحية",en:"Wing nut (simplified)"},
+ icon:'<circle cx="14" cy="14" r="5"/><path d="M9 12 q-6 -6 -7 1 q4 3 7 1 M19 12 q6 -6 7 1 q-4 3 -7 1"/>',
+ params:[F("M","القلاووظ M","Thread M",8,2),F("bd","قطر الجسم bd","Body dia bd",16,3),F("H","ارتفاع الجسم H","Body ht H",12),F("ws","امتداد الجناح ws","Wing span ws",44,6),F("wt","سماكة الجناح wt","Wing thk wt",4,1)],
+ draw(g,p){const s=fit(p.ws*1.2,p.bd,340,240),cx=230,cy=180,bd=p.bd*s,ws=p.ws*s,wt=p.wt*s;
+  circ(g,cx,cy,bd/2);circ(g,cx,cy,p.M*s/2*0.85,"3 3");
+  rect(g,cx-ws/2,cy-wt/2,ws/2-bd/2,wt);rect(g,cx+bd/2,cy-wt/2,ws/2-bd/2,wt);center(g,cx,cy,bd/2);
+  dimH(g,cx-ws/2,cx+ws/2,cy+bd/2+30,"span "+p.ws);txt(g,cx,cy-bd/2-10,"M"+p.M,11);
+  const sx=cx+ws/2+50,h=Math.max(p.H*s,14);rect(g,sx,cy-bd/2,h,bd);dimH(g,sx,sx+h,cy+bd/2+30,p.H);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.bd,height:p.H,name:"body"},
+  {op:"hole",diameter:p.M*0.85,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"create_plane",offset_from:"top",distance:p.wt/2,name:"wp"},
+  {op:"create_sketch",on:{plane:"wp"},name:"ws"},
+  {op:"draw_rectangle",sketch:"ws",width:p.ws,height:p.wt,at:{u:-p.ws/2,v:-p.wt/2}},
+  {op:"extrude",sketch:"ws",depth:p.H*0.5,name:"wings"},
+  {op:"note",text:"tapped M"+p.M},
+  {op:"save_part",path:"wing_nut.SLDPRT"}]};}},
+
+{id:"clevispin",code:"K-14",grp:"mach",
+ name:{ar:"دبوس شوكة (Clevis)",en:"Clevis pin"},
+ icon:'<rect x="4" y="11" width="18" height="5"/><rect x="2" y="9" width="3" height="9"/><circle cx="20" cy="13.5" r="1.2"/>',
+ params:[F("d","القطر d","Diameter d",10,2),F("L","الطول L","Length L",50),F("hd","قطر الرأس hd","Head dia hd",16,3),F("hh","سماكة الرأس hh","Head thk hh",4,1),F("cd","قطر ثقب المشبك cd","Cotter hole cd",3,1)],
+ draw(g,p){const s=fit(p.L+p.hh,p.hd,360,110),x=170,cy=200,hh=p.hh*s,hd=p.hd*s,L=p.L*s,d=p.d*s;
+  rect(g,x,cy-hd/2,hh,hd);rect(g,x+hh,cy-d/2,L,d);axis(g,x,x+hh+L,cy);
+  circ(g,x+hh+L-p.cd*s*2,cy,p.cd*s/2);
+  dimH(g,x+hh,x+hh+L,cy+hd/2+28,p.L);dimV(g,cy-d/2,cy+d/2,x+hh+L+34,dia(p.d));
+  dimV(g,cy-hd/2,cy+hd/2,x-30,dia(p.hd));txt(g,x+hh+L-p.cd*s*2,cy-d/2-10,dia(p.cd),9);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.hd,height:p.hh,name:"head"},
+  {op:"create_sketch",on:{face:{of_feature:"head",facing:"+z"}},name:"ss"},
+  {op:"draw_circle",sketch:"ss",diameter:p.d,at:"center"},
+  {op:"extrude",sketch:"ss",depth:p.L,name:"shank"},
+  {op:"hole",diameter:p.cd,through:true,on:{face:{of_feature:"shank",facing:"+x"}},at:{u:p.L-p.cd*2,v:0}},
+  {op:"save_part",path:"clevis_pin.SLDPRT"}]};}},
+
+{id:"standoff",code:"K-15",grp:"mach",
+ name:{ar:"فاصل مقلوظ (Standoff)",en:"Hex standoff"},
+ icon:'<path d="M14 4 l7 4 v10 l-7 4 l-7 -4 v-10 z"/><circle cx="14" cy="13" r="2.4"/>',
+ params:[F("s","عرض المفتاح s","Across flats s",8,3),F("L","الطول L","Length L",25),F("M","القلاووظ M","Thread M",4,2)],
+ draw(g,p){const sc=fit(p.s*2.4,p.s,280,220),S=p.s*sc,R=S/Math.sqrt(3),cx=205,cy=190;
+  let d="M";for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;
+   d+=(i?"L":"")+(cx+R*Math.cos(a)).toFixed(1)+" "+(cy+R*Math.sin(a)).toFixed(1)+" ";}
+  path(g,d+"Z");circ(g,cx,cy,p.M*sc/2*0.85,"3 3");center(g,cx,cy,R);
+  dimH(g,cx-S/2,cx+S/2,cy+R+28,"s="+p.s);txt(g,cx,cy-R-10,"M"+p.M,11);
+  const sx=cx+R+70,h=p.L*sc;rect(g,sx,cy-S/2,h,S);dimH(g,sx,sx+h,cy+R+28,p.L);},
+ json(p){const R=p.s/Math.sqrt(3),cmds=[
+  {op:"create_cylinder",diameter:2*R,height:p.L,name:"blank"},
+  {op:"hole",diameter:p.M*0.85,through:true,on:{face:{of_feature:"blank",facing:"+z"}},at:"center"}];
+  for(let i=0;i<6;i++)cmds.push(
+   {op:"create_plane",offset_from:"front",distance:p.s/2,rotate_deg:i*60,name:"f"+i},
+   {op:"create_sketch",on:{plane:"f"+i},name:"fs"+i},
+   {op:"draw_rectangle",sketch:"fs"+i,width:2*R,height:p.L,at:{u:-R,v:0}},
+   {op:"cut",sketch:"fs"+i,depth:R-p.s/2+1,name:"cut"+i});
+  cmds.push({op:"note",text:"tapped M"+p.M+" both ends"},{op:"save_part",path:"standoff.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+
+{id:"channel",code:"M-11",grp:"mill",
+ name:{ar:"قناة U (مقطع)",en:"U-channel section"},
+ icon:'<path d="M4 6 h4 v12 h12 v-12 h4 v16 h-20 z"/>',
+ params:[F("L","الطول L","Length L",150),F("W","العرض W","Width W",50,4),F("H","الارتفاع H","Height H",35,4),F("t","السماكة t","Thickness t",5,1)],
+ draw(g,p){const s=fit(p.W*2.3,p.H,320,220),W=p.W*s,H=p.H*s,t=p.t*s,x=175,y=150;
+  path(g,`M${x} ${y} h${t} v${H-t} h${W-2*t} v${-(H-t)} h${t} v${H} h${-W} z`);
+  dimH(g,x,x+W,y+H+28,p.W);dimV(g,y,y+H,x-30,p.H);dimH(g,x,x+t,y-16,p.t);
+  const sx=x+W+70;rect(g,sx,y,p.L*s*0.35,H);dimH(g,sx,sx+p.L*s*0.35,y+H+28,p.L);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.t,name:"web"},
+  {op:"create_sketch",on:{face:{of_feature:"web",facing:"+z"}},name:"f1"},
+  {op:"draw_rectangle",sketch:"f1",width:p.L,height:p.t,at:{u:0,v:0}},
+  {op:"extrude",sketch:"f1",depth:p.H-p.t,name:"flange1"},
+  {op:"create_sketch",on:{face:{of_feature:"web",facing:"+z"}},name:"f2"},
+  {op:"draw_rectangle",sketch:"f2",width:p.L,height:p.t,at:{u:0,v:p.W-p.t}},
+  {op:"extrude",sketch:"f2",depth:p.H-p.t,name:"flange2"},
+  {op:"save_part",path:"u_channel.SLDPRT"}]};}},
+
+{id:"anglebar",code:"M-12",grp:"mill",
+ name:{ar:"زاوية حديد (L-section)",en:"L angle bar"},
+ icon:'<path d="M5 4 v18 h18 v-4 h-14 v-14 z"/>',
+ params:[F("L","الطول L","Length L",150),F("A","الضلع A","Leg A",40,4),F("B","الضلع B","Leg B",40,4),F("t","السماكة t","Thickness t",5,1)],
+ draw(g,p){const s=fit(Math.max(p.A,p.B)*2.4,Math.max(p.A,p.B),320,240),a=p.A*s,b=p.B*s,t=p.t*s,x=180,y=110;
+  path(g,`M${x} ${y} h${t} v${a-t} h${b-t} v${t} h${-b} z`);
+  dimV(g,y,y+a,x-30,p.A);dimH(g,x,x+b,y+a+28,p.B);dimH(g,x,x+t,y-14,p.t);
+  const sx=x+b+70;rect(g,sx,y,p.L*s*0.35,a);dimH(g,sx,sx+p.L*s*0.35,y+a+28,p.L);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.B,thickness:p.t,name:"legB"},
+  {op:"create_sketch",on:{face:{of_feature:"legB",facing:"+z"}},name:"la"},
+  {op:"draw_rectangle",sketch:"la",width:p.L,height:p.t,at:{u:0,v:0}},
+  {op:"extrude",sketch:"la",depth:p.A-p.t,name:"legA"},
+  {op:"save_part",path:"angle_bar.SLDPRT"}]};}},
+
+{id:"hexbar",code:"L-18",grp:"lathe",
+ name:{ar:"عمود سداسي مثقوب",en:"Hex bar, bored"},
+ icon:'<path d="M14 4 l8 4.5 v9 l-8 4.5 l-8 -4.5 v-9 z"/><circle cx="14" cy="13" r="3.4"/>',
+ params:[F("s","عرض المفتاح s","Across flats s",24,4),F("L","الطول L","Length L",40),F("b","قطر التجويف b","Bore b",12)],
+ draw(g,p){const sc=fit(p.s*2.4,p.s,300,240),S=p.s*sc,R=S/Math.sqrt(3),cx=205,cy=190;
+  let d="M";for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;
+   d+=(i?"L":"")+(cx+R*Math.cos(a)).toFixed(1)+" "+(cy+R*Math.sin(a)).toFixed(1)+" ";}
+  path(g,d+"Z");circ(g,cx,cy,p.b*sc/2);center(g,cx,cy,R);
+  dimH(g,cx-S/2,cx+S/2,cy+R+28,"s="+p.s);txt(g,cx,cy+4,dia(p.b),11);
+  const sx=cx+R+70,h=p.L*sc;rect(g,sx,cy-S/2,h,S);
+  thin(g,sx,cy-p.b*sc/2,sx+h,cy-p.b*sc/2);thin(g,sx,cy+p.b*sc/2,sx+h,cy+p.b*sc/2);
+  dimH(g,sx,sx+h,cy+R+28,p.L);},
+ json(p){const R=p.s/Math.sqrt(3),cmds=[
+  {op:"create_cylinder",diameter:2*R,height:p.L,name:"blank"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"blank",facing:"+z"}},at:"center"}];
+  for(let i=0;i<6;i++)cmds.push(
+   {op:"create_plane",offset_from:"front",distance:p.s/2,rotate_deg:i*60,name:"f"+i},
+   {op:"create_sketch",on:{plane:"f"+i},name:"fs"+i},
+   {op:"draw_rectangle",sketch:"fs"+i,width:2*R,height:p.L,at:{u:-R,v:0}},
+   {op:"cut",sketch:"fs"+i,depth:R-p.s/2+1,name:"cut"+i});
+  cmds.push({op:"save_part",path:"hex_bar.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+
+{id:"endcap",code:"L-19",grp:"lathe",
+ name:{ar:"غطاء طرفي بحافة",en:"End cap, lipped"},
+ icon:'<path d="M6 8 h16 v3 h-3 v6 h-10 v-6 h-3 z"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",50,4),F("ID","قطر الحافة ID","Lip ID",40),F("T","سماكة الوجه T","Face thk T",6),F("lh","ارتفاع الحافة lh","Lip height lh",12)],
+ draw(g,p){const s=fit(p.OD*1.7,p.OD,340,280),R=p.OD*s/2,ir=p.ID*s/2,cx=210,cy=180;
+  circ(g,cx,cy,R);circ(g,cx,cy,ir);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+30,dia(p.OD));txt(g,cx,cy+4,dia(p.ID),11);
+  const sx=cx+R+66,T=Math.max(p.T*s,7),lh=p.lh*s;
+  path(g,`M${sx} ${cy-R} h${T+lh} v${T} h${-lh} v${2*R-2*T} h${lh} v${T} h${-(T+lh)} z`);
+  dimH(g,sx,sx+T,cy+R+30,p.T);dimH(g,sx,sx+T+lh,cy-R-14,(p.T+p.lh).toFixed(0));},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.T,name:"face"},
+  {op:"create_sketch",on:{face:{of_feature:"face",facing:"+z"}},name:"ls"},
+  {op:"draw_circle",sketch:"ls",diameter:p.OD,at:"center"},
+  {op:"draw_circle",sketch:"ls",diameter:p.ID,at:"center"},
+  {op:"extrude",sketch:"ls",depth:p.lh,name:"lip"},
+  {op:"save_part",path:"end_cap.SLDPRT"}]};}},
+
+{id:"gib",code:"K-16",grp:"mach",
+ name:{ar:"جيب انزلاق (Gib)",en:"Slide gib"},
+ icon:'<path d="M4 10 h20 l-3 8 h-17 z"/><circle cx="8" cy="13" r="1.1"/><circle cx="16" cy="13" r="1.1"/>',
+ params:[F("L","الطول L","Length L",120),F("W","العرض W","Width W",25,3),F("H","الارتفاع H","Height H",12,2),F("ang","زاوية الميل ang","Bevel ° ang",10,1),F("d","ثقوب الضبط d","Adjust holes d",6),F("n","عدد الثقوب n","Holes n",3,2)],
+ draw(g,p){const s=fit(p.L,p.W*1.4,360,140),L=p.L*s,W=p.W*s,off=Math.tan(p.ang*Math.PI/180)*W,x=110,y=170;
+  path(g,`M${x} ${y} h${L} l${-off*s} ${W} h${-(L)} z`);
+  const start=x+L/(p.n+1);
+  for(let i=0;i<p.n;i++)circ(g,start+i*L/(p.n+1),y+W/2,p.d*s/2);
+  dimH(g,x,x+L,y+W+30,p.L);dimV(g,y,y+W,x-30,p.W);
+  txt(g,x+L/2,y-14,p.ang+"° bevel · "+p.n+"× "+dia(p.d),11);},
+ json(p){const off=Math.tan(p.ang*Math.PI/180)*p.W,cmds=[
+  {op:"create_sketch",on:{plane:"front"},name:"prof"},
+  {op:"draw_polygon",sketch:"prof",points:[[0,0],[p.L,0],[p.L-off,p.W],[0,p.W]]},
+  {op:"extrude",sketch:"prof",depth:p.H,name:"gib"}];
+  const start=p.L/(p.n+1);
+  for(let i=0;i<p.n;i++)cmds.push({op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"gib",facing:"+z"}},at:{u:start+i*p.L/(p.n+1),v:p.W/2}});
+  cmds.push({op:"save_part",path:"slide_gib.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+];
+window.__PARTS.push(...MORE4);
+/* ═══════════ BATCH 5 — نحو السقف النظيف (13) ═══════════ */
+const MORE5=[
+{id:"cone",code:"L-20",grp:"lathe",
+ name:{ar:"مخروط توسيط",en:"Centering cone"},
+ icon:'<path d="M14 4 l8 16 h-16 z"/><circle cx="14" cy="16" r="2"/>',
+ params:[F("D","قطر القاعدة D","Base dia D",50,4),F("d","قطر القمة d","Top dia d",16),F("H","الارتفاع H","Height H",40),F("b","التجويف b","Bore b",10)],
+ draw(g,p){const s=fit(p.D*1.6,p.H,320,250),R=p.D*s/2,r=p.d*s/2,H=p.H*s,x=200,yb=330,br=p.b*s/2;
+  path(g,`M${x-R} ${yb} l${R-r} ${-H} h${2*r} l${R-r} ${H} z`);
+  thin(g,x-br,yb,x-br,yb-H);thin(g,x+br,yb,x+br,yb-H);axis(g,x-R-10,x+R+10,yb);
+  dimH(g,x-R,x+R,yb+28,dia(p.D));dimH(g,x-r,x+r,yb-H-14,dia(p.d));
+  dimV(g,yb-H,yb,x+R+34,p.H);txt(g,x,yb-H/2,dia(p.b),10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cone",base_diameter:p.D,top_diameter:p.d,height:p.H,name:"cone"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"cone",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"centering_cone.SLDPRT"}]};}},
+
+{id:"vpulley",code:"L-21",grp:"lathe",
+ name:{ar:"بكرة حز V",en:"V-belt pulley"},
+ icon:'<circle cx="14" cy="13" r="10"/><path d="M9 13 l5 -3 l5 3" fill="none"/><circle cx="14" cy="13" r="2.5"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",90,6),F("W","العرض W","Width W",20),F("b","التجويف b","Bore b",16),F("gd","عمق الحز gd","Groove d gd",10,2),F("ga","زاوية الحز° ga","Groove ° ga",38,20)],
+ draw(g,p){const s=fit(p.OD*1.8,p.OD,400,300),R=p.OD*s/2,cx=230,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,R-p.gd*s,"4 4");circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.OD));txt(g,cx,cy+4,dia(p.b),11);
+  const sx=cx+R+64,w=p.W*s,gd=p.gd*s,go=Math.tan(p.ga*Math.PI/360)*gd;
+  path(g,`M${sx} ${cy-R} h${w} v${gd*0} M${sx} ${cy-R} h${w} l0 0`);
+  rect(g,sx,cy-R,w,2*R);
+  path(g,`M${sx+w/2-go} ${cy-R} l${go} ${gd} l${-go} ${gd}`,"var(--signal)",1);
+  path(g,`M${sx+w/2-go} ${cy+R} l${go} ${-gd} l${-go} ${-gd}`,"var(--signal)",1);
+  dimH(g,sx,sx+w,cy+R+32,p.W);txt(g,sx+w/2,cy,p.ga+"°",10);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.W,name:"body"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"create_sketch",on:{plane:"front"},name:"vg"},
+  {op:"draw_polygon",sketch:"vg",points:[[p.OD/2,-p.W/2],[p.OD/2,p.W/2],[p.OD/2-p.gd,p.gd*0]]},
+  {op:"revolve_cut",sketch:"vg",axis:"z",name:"vgroove"},
+  {op:"save_part",path:"v_pulley.SLDPRT"}]};}},
+
+{id:"retainring",code:"L-22",grp:"lathe",
+ name:{ar:"حلقة حصر (Retainer)",en:"Retaining ring groove disc"},
+ icon:'<circle cx="14" cy="13" r="9.5"/><circle cx="14" cy="13" r="7"/><circle cx="14" cy="13" r="3"/>',
+ params:[F("OD","القطر الخارجي OD","Outer dia OD",50,4),F("gd","قطر قاع الحز gd","Groove dia gd",42),F("gw","عرض الحز gw","Groove width gw",2,0.5),F("b","التجويف b","Bore b",20),F("W","العرض W","Width W",20)],
+ draw(g,p){const s=fit(p.OD*1.8,p.OD,400,300),R=p.OD*s/2,cx=230,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.gd*s/2,"3 3");circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R);
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.OD));txt(g,cx,cy+4,dia(p.b),10);
+  txt(g,cx,cy-R-12,"groove "+dia(p.gd),10);
+  const sx=cx+R+64,w=p.W*s,gx=sx+w*0.4,gr=(R-p.gd*s/2);rect(g,sx,cy-R,w,2*R);
+  rect(g,gx,cy-R,p.gw*s,gr);rect(g,gx,cy+R-gr,p.gw*s,gr);dimH(g,sx,sx+w,cy+R+32,p.W);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.OD,height:p.W,name:"body"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"create_plane",offset_from:"bottom",distance:p.W*0.4,name:"gp"},
+  {op:"create_sketch",on:{plane:"gp"},name:"gs"},
+  {op:"draw_circle",sketch:"gs",diameter:p.OD+2,at:"center"},
+  {op:"draw_circle",sketch:"gs",diameter:p.gd,at:"center"},
+  {op:"cut",sketch:"gs",depth:p.gw,name:"groove"},
+  {op:"save_part",path:"retainer_disc.SLDPRT"}]};}},
+
+{id:"knob",code:"L-23",grp:"lathe",
+ name:{ar:"مقبض دائري محزز",en:"Knurled knob"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="2.5"/><path d="M14 4 v-1 M20.4 6.6 l0.7-0.7 M23 13 h1 M20.4 19.4 l0.7 0.7 M14 22 v1 M7.6 19.4 l-0.7 0.7 M5 13 h-1 M7.6 6.6 l-0.7-0.7"/>',
+ params:[F("D","القطر D","Diameter D",40,4),F("H","الارتفاع H","Height H",22),F("b","تجويف العمود b","Shaft bore b",8),F("bh","عمق التجويف bh","Bore depth bh",15)],
+ draw(g,p){const s=fit(p.D*1.7,p.D,320,260),R=p.D*s/2,cx=210,cy=180;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R);
+  for(let i=0;i<24;i++){const a=i*2*Math.PI/24;line(g,cx+Math.cos(a)*(R-3),cy+Math.sin(a)*(R-3),cx+Math.cos(a)*R,cy+Math.sin(a)*R,"var(--dim)",.6);}
+  dimH(g,cx-R,cx+R,cy+R+30,dia(p.D));txt(g,cx,cy+4,dia(p.b),10);
+  const sx=cx+R+64,h=p.H*s,br=p.b*s/2;rect(g,sx,cy-R,h,2*R);
+  rect(g,sx+h-p.bh*s,cy-br,p.bh*s,2*br);dimH(g,sx,sx+h,cy+R+30,p.H);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D,height:p.H,name:"body"},
+  {op:"hole",diameter:p.b,through:false,depth:p.bh,on:{face:{of_feature:"body",facing:"-z"}},at:"center"},
+  {op:"note",text:"knurled OD (finish)"},
+  {op:"save_part",path:"knob.SLDPRT"}]};}},
+
+{id:"bearingblock",code:"M-13",grp:"mill",
+ name:{ar:"مسند تحميل مشقوق",en:"Split bearing block"},
+ icon:'<rect x="4" y="12" width="20" height="8"/><path d="M8 12 a6 6 0 0 1 12 0" fill="none"/><circle cx="14" cy="12" r="4" fill="none"/>',
+ params:[F("L","الطول L","Length L",100),F("W","العرض W","Width W",50),F("H","الارتفاع H","Height H",45),F("B","قطر البيرنق B","Bearing bore B",30),F("hc","ارتفاع المركز hc","Center ht hc",28),F("d","ثقوب التثبيت d","Bolt holes d",10)],
+ draw(g,p){const s=fit(p.L,p.H,320,220),L=p.L*s,H=p.H*s,x=150,y=110,B=p.B*s;
+  rect(g,x,y,L,H);circ(g,x+L/2,y+(H-p.hc*s),B/2);center(g,x+L/2,y+(H-p.hc*s),B/2);
+  circ(g,x+L*0.15,y+H-8,p.d*s/2);circ(g,x+L*0.85,y+H-8,p.d*s/2);
+  thin(g,x,y+(H-p.hc*s),x+L,y+(H-p.hc*s));
+  dimH(g,x,x+L,y+H+30,p.L);dimV(g,y,y+H,x-32,p.H);
+  txt(g,x+L/2,y+(H-p.hc*s)+4,dia(p.B),11);dimV(g,y+(H-p.hc*s),y+H,x+L+34,p.hc);
+  txt(g,x+L*0.15,y+H-16,"2× "+dia(p.d),9);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.H,name:"block"},
+  {op:"hole",diameter:p.B,through:true,on:{face:{of_feature:"block",facing:"+y"}},at:{u:p.L/2,v:p.hc}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"block",facing:"+z"}},at:{u:p.L*0.15,v:p.W/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"block",facing:"+z"}},at:{u:p.L*0.85,v:p.W/2}},
+  {op:"save_part",path:"bearing_block.SLDPRT"}]};}},
+
+{id:"ribgusset",code:"M-14",grp:"mill",
+ name:{ar:"كتف تقوية مثلثي",en:"Triangular gusset"},
+ icon:'<path d="M5 4 v18 h18 z"/><circle cx="8" cy="8" r="1.1"/><circle cx="8" cy="14" r="1.1"/><circle cx="14" cy="19" r="1.1"/>',
+ params:[F("A","الضلع الرأسي A","Vertical A",80,4),F("B","الضلع الأفقي B","Horizontal B",80,4),F("T","السماكة T","Thickness T",8),F("d","قطر الثقوب d","Hole dia d",8),F("m","إزاحة m","Margin m",14,3)],
+ draw(g,p){const s=fit(Math.max(p.A,p.B)*1.6,Math.max(p.A,p.B),340,260),a=p.A*s,b=p.B*s,x=150,y=100,m=p.m*s,r=p.d*s/2;
+  path(g,`M${x} ${y} v${a} h${b} z`);
+  circ(g,x+m,y+m,r);circ(g,x+m,y+a-m,r);circ(g,x+b-m,y+a-m,r);
+  dimV(g,y,y+a,x-32,p.A);dimH(g,x,x+b,y+a+28,p.B);
+  const sx=x+b+70;rect(g,sx,y,Math.max(p.T*s,7),a);dimH(g,sx,sx+Math.max(p.T*s,7),y+a+28,p.T);
+  txt(g,x+m+14,y+a-m,"3× "+dia(p.d),9,"var(--signal)","start");},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_sketch",on:{plane:"front"},name:"tri"},
+  {op:"draw_polygon",sketch:"tri",points:[[0,0],[0,p.A],[p.B,p.A]]},
+  {op:"extrude",sketch:"tri",depth:p.T,name:"gusset"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"gusset",facing:"+z"}},at:{u:p.m,v:p.m}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"gusset",facing:"+z"}},at:{u:p.m,v:p.A-p.m}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"gusset",facing:"+z"}},at:{u:p.B-p.m,v:p.A-p.m}},
+  {op:"save_part",path:"gusset.SLDPRT"}]};}},
+
+{id:"slottedbar",code:"M-15",grp:"mill",
+ name:{ar:"قضيب بفتحة طولية",en:"Slotted flat bar"},
+ icon:'<rect x="3" y="10" width="22" height="7" rx="1"/><rect x="7" y="12" width="14" height="3" rx="1.5"/>',
+ params:[F("L","الطول L","Length L",140),F("W","العرض W","Width W",30,3),F("T","السماكة T","Thickness T",8),F("sl","طول الفتحة sl","Slot len sl",90,4),F("sw","عرض الفتحة sw","Slot width sw",10,2)],
+ draw(g,p){const s=fit(p.L,p.W,360,120),w=p.L*s,h=p.W*s,x=115,y=180,sl=p.sl*s,sr=p.sw*s/2;
+  rect(g,x,y,w,h);slotH(g,x+w/2,y+h/2,sl,sr);
+  dimH(g,x,x+w,y+h+30,p.L);dimV(g,y,y+h,x+w+38,p.W);
+  txt(g,x+w/2,y-14,"slot "+p.sl+"×"+p.sw,11);
+  const sy=y+h+56;rect(g,x,sy,w,Math.max(p.T*s,8));dimV(g,sy,sy+Math.max(p.T*s,8),x+w+38,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.W,thickness:p.T,name:"bar"},
+  {op:"slot",length:p.sl,width:p.sw,through:true,on:{face:{of_feature:"bar",facing:"+z"}},at:{u:p.L/2,v:p.W/2}},
+  {op:"save_part",path:"slotted_bar.SLDPRT"}]};}},
+
+{id:"cbore_boss",code:"K-17",grp:"mach",
+ name:{ar:"عمود بكتف Counterbore",en:"Boss stud, counterbored"},
+ icon:'<rect x="9" y="4" width="10" height="7"/><rect x="6" y="11" width="16" height="9"/><circle cx="14" cy="8" r="1.6"/>',
+ params:[F("bd","قطر القاعدة bd","Base dia bd",40,4),F("bh","سماكة القاعدة bh","Base thk bh",10),F("sd","قطر العمود sd","Stud dia sd",20),F("sh","ارتفاع العمود sh","Stud ht sh",25),F("cb","قطر الغطس cb","Cbore dia cb",14),F("cd","عمق الغطس cd","Cbore depth cd",8),F("b","القطر النافذ b","Through bore b",9)],
+ draw(g,p){const s=fit(p.bd*1.7,p.bh+p.sh,320,250),bd=p.bd*s,bh=p.bh*s,sd=p.sd*s,sh=p.sh*s,x=180,yb=310;
+  rect(g,x-bd/2,yb-bh,bd,bh);rect(g,x-sd/2,yb-bh-sh,sd,sh);
+  rect(g,x-p.cb*s/2,yb-bh-sh,p.cb*s,p.cd*s);
+  thin(g,x-p.b*s/2,yb-bh-sh,x-p.b*s/2,yb);thin(g,x+p.b*s/2,yb-bh-sh,x+p.b*s/2,yb);axis(g,x,x,yb);
+  dimH(g,x-bd/2,x+bd/2,yb+28,dia(p.bd));dimV(g,yb-bh,yb,x-bd/2-30,p.bh);
+  dimV(g,yb-bh-sh,yb-bh,x-bd/2-30,p.sh);
+  txt(g,x,yb-bh-sh-10,"cbore "+dia(p.cb)+"↓"+p.cd,10);txt(g,x,yb-8,dia(p.b),9);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.bd,height:p.bh,name:"base"},
+  {op:"create_sketch",on:{face:{of_feature:"base",facing:"+z"}},name:"ss"},
+  {op:"draw_circle",sketch:"ss",diameter:p.sd,at:"center"},
+  {op:"extrude",sketch:"ss",depth:p.sh,name:"stud"},
+  {op:"cb_hole",cbore_dia:p.cb,cbore_depth:p.cd,hole_dia:p.b,through:true,on:{face:{of_feature:"stud",facing:"+z"}},at:"center"},
+  {op:"save_part",path:"boss_stud.SLDPRT"}]};}},
+
+{id:"footmount",code:"K-18",grp:"mach",
+ name:{ar:"قاعدة تثبيت بأقدام",en:"Foot mount bracket"},
+ icon:'<rect x="8" y="5" width="12" height="10"/><rect x="3" y="15" width="6" height="4"/><rect x="19" y="15" width="6" height="4"/><path d="M9 15 h10"/>',
+ params:[F("bw","عرض الجسم bw","Body width bw",50,4),F("bh","ارتفاع الجسم bh","Body ht bh",40),F("fl","طول القدم fl","Foot len fl",22,4),F("ft","سماكة القدم ft","Foot thk ft",8),F("T","العمق T","Depth T",40),F("d","ثقوب الأقدام d","Foot holes d",9)],
+ draw(g,p){const s=fit((p.bw+2*p.fl)*1.3,p.bh+p.ft,340,240),bw=p.bw*s,bh=p.bh*s,fl=p.fl*s,ft=p.ft*s,x=180,y=120,r=p.d*s/2;
+  rect(g,x,y,bw,bh);rect(g,x-fl,y+bh-ft,fl,ft);rect(g,x+bw,y+bh-ft,fl,ft);
+  circ(g,x-fl/2,y+bh-ft/2,r);circ(g,x+bw+fl/2,y+bh-ft/2,r);
+  dimH(g,x-fl,x+bw+fl,y+bh+30,(p.bw+2*p.fl).toFixed(0));dimV(g,y,y+bh,x-fl-30,p.bh);
+  txt(g,x+bw/2,y-14,"2× "+dia(p.d)+" feet",11);
+  const sx=x+bw+fl+50;rect(g,sx,y,p.T*s,bh);dimH(g,sx,sx+p.T*s,y+bh+30,p.T);},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.bw,height:p.T,thickness:p.bh,name:"body"},
+  {op:"create_sketch",on:{face:{of_feature:"body",facing:"-z"}},name:"f1"},
+  {op:"draw_rectangle",sketch:"f1",width:p.fl,height:p.T,at:{u:-p.fl,v:0}},
+  {op:"extrude",sketch:"f1",depth:p.ft,name:"foot1"},
+  {op:"create_sketch",on:{face:{of_feature:"body",facing:"-z"}},name:"f2"},
+  {op:"draw_rectangle",sketch:"f2",width:p.fl,height:p.T,at:{u:p.bw,v:0}},
+  {op:"extrude",sketch:"f2",depth:p.ft,name:"foot2"},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"foot1",facing:"-z"}},at:{u:-p.fl/2,v:p.T/2}},
+  {op:"hole",diameter:p.d,through:true,on:{face:{of_feature:"foot2",facing:"-z"}},at:{u:p.bw+p.fl/2,v:p.T/2}},
+  {op:"save_part",path:"foot_mount.SLDPRT"}]};}},
+
+{id:"turnbuckle",code:"K-19",grp:"mach",
+ name:{ar:"جسم شدّاد (Turnbuckle)",en:"Turnbuckle body"},
+ icon:'<rect x="8" y="10" width="12" height="7" rx="3"/><rect x="3" y="12" width="6" height="3"/><rect x="19" y="12" width="6" height="3"/>',
+ params:[F("L","الطول L","Body len L",70,6),F("D","القطر D","Body dia D",22,4),F("M","قلاووظ الطرف M","End thread M",12,3),F("w","فتحة الوسط w","Window w",30,4)],
+ draw(g,p){const s=fit(p.L,p.D,340,120),L=p.L*s,D=p.D*s,x=150,cy=200,w=p.w*s;
+  rect(g,x,cy-D/2,L,D);rect(g,x+(L-w)/2,cy-D/2*0.6,w,D*0.6);axis(g,x,x+L,cy);
+  for(let gx=x;gx<x+(L-w)/2*0.5;gx+=4)thin(g,gx,cy-D/2,gx,cy+D/2);
+  for(let gx=x+L-(L-w)/2*0.5;gx<x+L;gx+=4)thin(g,gx,cy-D/2,gx,cy+D/2);
+  dimH(g,x,x+L,cy+D/2+28,p.L);dimV(g,cy-D/2,cy+D/2,x-30,dia(p.D));
+  txt(g,x+L/2,cy-D/2-10,"window "+p.w,10);txt(g,x+8,cy+D/2+44,"M"+p.M+" ends (L/R)",9,"var(--dim)","start");},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D,height:p.L,name:"body"},
+  {op:"create_sketch",on:{face:{of_feature:"body",facing:"+y"}},name:"win"},
+  {op:"draw_rectangle",sketch:"win",width:p.w,height:p.D*0.6,at:{u:(p.L-p.w)/2,v:-p.D*0.3}},
+  {op:"cut",sketch:"win",through:true,name:"window"},
+  {op:"hole",diameter:p.M,through:false,depth:p.L*0.3,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"hole",diameter:p.M,through:false,depth:p.L*0.3,on:{face:{of_feature:"body",facing:"-z"}},at:"center"},
+  {op:"note",text:"threads: one LH one RH"},
+  {op:"save_part",path:"turnbuckle.SLDPRT"}]};}},
+
+{id:"parallelset",code:"F-06",grp:"fix",
+ name:{ar:"متوازيات فحص (زوج)",en:"Parallel set (pair)"},
+ icon:'<rect x="4" y="7" width="8" height="12"/><rect x="16" y="7" width="8" height="12"/>',
+ params:[F("L","الطول L","Length L",100,4),F("H","الارتفاع H","Height H",40,4),F("T","السماكة T","Thickness T",10,2)],
+ draw(g,p){const s=fit(p.L,p.H,300,200),L=p.L*s,H=p.H*s,x=170,y=130;
+  rect(g,x,y,L,H);
+  dimH(g,x,x+L,y+H+30,p.L);dimV(g,y,y+H,x-32,p.H);
+  const sx=x+L+70;rect(g,sx,y,Math.max(p.T*s,8),H);dimH(g,sx,sx+Math.max(p.T*s,8),y+H+30,p.T);
+  txt(g,x+L/2,y-14,"matched pair · ground",11,"var(--steel)");},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_plate",width:p.L,height:p.T,thickness:p.H,name:"parallel"},
+  {op:"note",text:"produce 2× matched, ground flat/parallel"},
+  {op:"save_part",path:"parallel.SLDPRT"}]};}},
+
+{id:"vblock2",code:"F-07",grp:"fix",
+ name:{ar:"بلوك V بفتحة",en:"V-block, slotted"},
+ icon:'<rect x="4" y="6" width="20" height="14"/><path d="M9 6 l5 6 l5 -6" fill="none"/>',
+ params:[F("W","العرض W","Width W",60,5),F("H","الارتفاع H","Height H",50,5),F("L","الطول L","Length L",60,5),F("va","زاوية V° va","V angle va",90,60),F("vd","عمق V vd","V depth vd",22,4)],
+ draw(g,p){const s=fit(p.W,p.H,300,220),W=p.W*s,H=p.H*s,x=170,y=110,vd=p.vd*s;
+  const half=Math.tan(p.va*Math.PI/360)*vd;
+  rect(g,x,y,W,H);
+  path(g,`M${x+W/2-half} ${y} l${half} ${vd} l${half} ${-vd}`,"var(--ink)",1.6);
+  dimH(g,x,x+W,y+H+30,p.W);dimV(g,y,y+H,x-32,p.H);
+  txt(g,x+W/2,y+vd+16,p.va+"°",11);dimV(g,y,y+vd,x+W+34,p.vd);
+  const sx=x+W+70;rect(g,sx,y,p.L*s*0.6,H);dimH(g,sx,sx+p.L*s*0.6,y+H+30,p.L);},
+ json(p){const half=Math.tan(p.va*Math.PI/360)*p.vd,cmds=[
+  {op:"create_plate",width:p.W,height:p.L,thickness:p.H,name:"block"},
+  {op:"create_sketch",on:{face:{of_feature:"block",facing:"+z"}},name:"vs"},
+  {op:"draw_polygon",sketch:"vs",points:[[p.W/2-half,0],[p.W/2,p.vd],[p.W/2+half,0]]},
+  {op:"cut",sketch:"vs",through:true,name:"vgroove"}];
+  cmds.push({op:"save_part",path:"v_block.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+];
+window.__PARTS.push(...MORE5);
+/* ═══════════ BATCH 6 — تروس ومنحنيات v0.5 (6) ═══════════ */
+const MORE6=[
+{id:"spurgear",code:"G-10",grp:"gears",
+ name:{ar:"ترس مستقيم (Involute حقيقي)",en:"Involute spur gear"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="2.5"/><path d="M14 4 v-1.5 M23 13 h1.5 M14 22 v1.5 M5 13 h-1.5 M20.4 6.6 l1-1 M20.4 19.4 l1 1 M7.6 6.6 l-1-1 M7.6 19.4 l-1 1"/>',
+ params:[F("m","المعامل m (module)","Module m",2,0.5),F("z","عدد الأسنان z","Teeth z",20,6),F("pa","زاوية الضغط° pa","Pressure ° pa",20,14),F("W","العرض W","Face width W",15),F("b","التجويف b","Bore b",16),F("kw","عرض الخابور kw","Key w kw",5,0)],
+ draw(g,p){const pitch=p.m*p.z,tip=pitch+2*p.m,root=pitch-2.5*p.m,base=pitch*Math.cos(p.pa*Math.PI/180);
+  const s=fit(tip*1.7,tip,400,300),cx=225,cy=200,Rt=tip*s/2,Rp=pitch*s/2,Rr=root*s/2,Rb=base*s/2;
+  // pitch (dashed), base, root, tip circles
+  circ(g,cx,cy,Rt);circ(g,cx,cy,Rp,"5 4");circ(g,cx,cy,Rr,"2 3");circ(g,cx,cy,p.b*s/2);center(g,cx,cy,Rt);
+  // draw simplified teeth as trapezoids narrowing to tip (visual of involute)
+  const half=Math.PI/p.z;
+  for(let i=0;i<p.z;i++){const a=i*2*Math.PI/p.z;
+    const tw=half*0.62, rw=half*0.92;
+    const pts=[[Rr,a-rw],[Rp,a-tw*0.8],[Rt,a-tw*0.5],[Rt,a+tw*0.5],[Rp,a+tw*0.8],[Rr,a+rw]];
+    let d="M";pts.forEach((pt,j)=>{d+=(j?"L":"")+(cx+pt[0]*Math.cos(pt[1])).toFixed(1)+" "+(cy+pt[0]*Math.sin(pt[1])).toFixed(1)+" ";});
+    path(g,d,"var(--ink)",1.2);}
+  // keyway
+  if(p.kw>0){const kr=p.b*s/2;path(g,`M${cx-p.kw*s/2} ${cy-kr} v${-p.kw*s*0.7} h${p.kw*s} v${p.kw*s*0.7}`,"var(--ink)",1.2);}
+  dimH(g,cx-Rt,cx+Rt,cy+Rt+30,"tip "+dia(tip.toFixed(1)));
+  txt(g,cx,cy-Rp-6,"pitch "+dia(pitch),9,"var(--signal)");
+  txt(g,cx,cy+5,dia(p.b),10);
+  txt(g,cx,cy-Rt-14,"m"+p.m+" · z"+p.z+" · "+p.pa+"°",11);
+  const sx=cx+Rt+50,w=Math.max(p.W*s,10);rect(g,sx,cy-Rt,w,2*Rt);dimH(g,sx,sx+w,cy+Rt+30,p.W);},
+ json(p){return{schema:"0.5",units:"mm",commands:[
+  {op:"involute_spur_gear",module:p.m,teeth:p.z,pressure_angle:p.pa,face_width:p.W,bore:p.b,
+   keyway:p.kw>0?{width:p.kw,depth:p.kw*0.5}:null,name:"gear"},
+  {op:"save_part",path:"spur_gear_m"+p.m+"_z"+p.z+".SLDPRT"}]};}},
+
+{id:"gearpair",code:"G-11",grp:"gears",
+ name:{ar:"زوج تروس متعشّق",en:"Meshing gear pair"},
+ icon:'<circle cx="9" cy="13" r="6"/><circle cx="20" cy="13" r="5"/><circle cx="9" cy="13" r="1.5"/><circle cx="20" cy="13" r="1.5"/>',
+ params:[F("m","المعامل m","Module m",2,0.5),F("z1","أسنان الترس 1","Teeth z1",20,6),F("z2","أسنان الترس 2","Teeth z2",40,6),F("W","العرض W","Face width W",15),F("b","التجويف b","Bore b",14)],
+ draw(g,p){const cd=p.m*(p.z1+p.z2)/2;const tip1=p.m*p.z1+2*p.m,tip2=p.m*p.z2+2*p.m;
+  const span=tip1/2+cd+tip2/2;const s=fit(span*1.2,Math.max(tip1,tip2),420,300);
+  const R1=tip1*s/2,R2=tip2*s/2,P1=p.m*p.z1*s/2,P2=p.m*p.z2*s/2;
+  const cx1=100+R1,cy=200,cx2=cx1+cd*s;
+  circ(g,cx1,cy,R1);circ(g,cx1,cy,P1,"5 4");circ(g,cx1,cy,p.b*s/2);center(g,cx1,cy,R1);
+  circ(g,cx2,cy,R2);circ(g,cx2,cy,P2,"5 4");circ(g,cx2,cy,p.b*s/2);center(g,cx2,cy,R2);
+  // pitch tangent point
+  circ(g,(cx1+P1===cx2-P2)?cx1+P1:cx1+P1,cy,2);
+  line(g,cx1,cy,cx2,cy,"var(--dim)",.8);
+  dimH(g,cx1,cx2,cy+Math.max(R1,R2)+32,"center dist "+cd.toFixed(1));
+  txt(g,cx1,cy-R1-12,"z"+p.z1,11);txt(g,cx2,cy-R2-12,"z"+p.z2,11);
+  txt(g,(cx1+cx2)/2,cy-Math.max(R1,R2)-14,"m"+p.m+" mesh · ratio "+(p.z2/p.z1).toFixed(2),11,"var(--signal)");},
+ json(p){const cd=p.m*(p.z1+p.z2)/2;return{schema:"0.5",units:"mm",commands:[
+  {op:"involute_spur_gear",module:p.m,teeth:p.z1,face_width:p.W,bore:p.b,name:"pinion"},
+  {op:"save_part",path:"pinion.SLDPRT"},
+  {op:"involute_spur_gear",module:p.m,teeth:p.z2,face_width:p.W,bore:p.b,name:"wheel"},
+  {op:"save_part",path:"wheel.SLDPRT"},
+  {op:"new_assembly",name:"gear_train"},
+  {op:"insert_component",part:"pinion.SLDPRT",at:{x:0,y:0,z:0}},
+  {op:"insert_component",part:"wheel.SLDPRT",at:{x:cd,y:0,z:0}},
+  {op:"mate",type:"distance",value:cd,note:"center distance = m(z1+z2)/2"},
+  {op:"save_assembly",path:"gear_pair.SLDASM"}]};}},
+
+{id:"ringgear",code:"G-12",grp:"gears",
+ name:{ar:"ترس داخلي (Ring)",en:"Internal ring gear"},
+ icon:'<circle cx="14" cy="13" r="10"/><circle cx="14" cy="13" r="6.5"/><path d="M14 6.5 v1.5 M20.5 13 h-1.5 M14 19.5 v-1.5 M7.5 13 h1.5"/>',
+ params:[F("m","المعامل m","Module m",2,0.5),F("z","عدد الأسنان z","Teeth z",36,10),F("OD","القطر الخارجي OD","Outer dia OD",90,6),F("W","العرض W","Width W",15)],
+ draw(g,p){const pitch=p.m*p.z,root=pitch+2.5*p.m,tip=pitch-2*p.m;
+  const s=fit(p.OD*1.6,p.OD,400,300),cx=220,cy=200,Ro=p.OD*s/2,Rp=pitch*s/2,Rt=tip*s/2;
+  circ(g,cx,cy,Ro);circ(g,cx,cy,Rp,"5 4");circ(g,cx,cy,Rt);center(g,cx,cy,Ro);
+  const half=Math.PI/p.z;
+  for(let i=0;i<p.z;i++){const a=i*2*Math.PI/p.z;
+    const pts=[[Rt,a-half*0.5],[Rp,a-half*0.7],[Rp,a+half*0.7],[Rt,a+half*0.5]];
+    let d="M";pts.forEach((pt,j)=>{d+=(j?"L":"")+(cx+pt[0]*Math.cos(pt[1])).toFixed(1)+" "+(cy+pt[0]*Math.sin(pt[1])).toFixed(1)+" ";});
+    path(g,d,"var(--ink)",1);}
+  dimH(g,cx-Ro,cx+Ro,cy+Ro+30,dia(p.OD));
+  txt(g,cx,cy-Ro-14,"internal m"+p.m+" · z"+p.z,11);txt(g,cx,cy+5,"teeth inward",9,"var(--dim)");},
+ json(p){return{schema:"0.5",units:"mm",commands:[
+  {op:"internal_ring_gear",module:p.m,teeth:p.z,outer_diameter:p.OD,face_width:p.W,name:"ring"},
+  {op:"save_part",path:"ring_gear.SLDPRT"}]};}},
+
+{id:"isosprocket",code:"G-13",grp:"gears",
+ name:{ar:"سبروكت ISO-606",en:"ISO-606 sprocket"},
+ icon:'<circle cx="14" cy="13" r="9.5"/><circle cx="14" cy="13" r="2.5"/><circle cx="14" cy="4.5" r="1.3"/><circle cx="21.5" cy="9" r="1.3"/><circle cx="21.5" cy="17" r="1.3"/><circle cx="14" cy="21.5" r="1.3"/><circle cx="6.5" cy="17" r="1.3"/><circle cx="6.5" cy="9" r="1.3"/>',
+ params:[F("P","خطوة الجنزير P","Chain pitch P",12.7,6),F("z","عدد الأسنان z","Teeth z",17,9),F("W","العرض W","Width W",8),F("b","التجويف b","Bore b",20),F("rr","نصف قطر البكرة rr","Roller r rr",4,1)],
+ draw(g,p){const pd=p.P/Math.sin(Math.PI/p.z);const s=fit(pd*1.5,pd,400,300),cx=225,cy=200,Rp=pd*s/2;
+  circ(g,cx,cy,Rp+p.rr*s);circ(g,cx,cy,Rp,"5 4");circ(g,cx,cy,p.b*s/2);center(g,cx,cy,Rp+p.rr*s);
+  for(let i=0;i<p.z;i++){const a=i*2*Math.PI/p.z-Math.PI/2;
+    circ(g,cx+Math.cos(a)*Rp,cy+Math.sin(a)*Rp,p.rr*s*0.85);}
+  dimH(g,cx-Rp,cx+Rp,cy+Rp+34,"PD "+pd.toFixed(1));
+  txt(g,cx,cy+5,dia(p.b),10);txt(g,cx,cy-Rp-p.rr*s-12,"ISO-606 · "+p.z+"T · P"+p.P,11);},
+ json(p){return{schema:"0.5",units:"mm",commands:[
+  {op:"sprocket_iso",chain_pitch:p.P,teeth:p.z,roller_radius:p.rr,face_width:p.W,bore:p.b,name:"sprocket"},
+  {op:"save_part",path:"sprocket_iso.SLDPRT"}]};}},
+
+{id:"helixstud",code:"G-14",grp:"gears",
+ name:{ar:"عمود بلولب حلزوني (تجميلي)",en:"Helix-threaded shaft (cosmetic)"},
+ icon:'<rect x="8" y="4" width="8" height="18" rx="1"/><path d="M8 7 l8 -1.5 M8 11 l8 -1.5 M8 15 l8 -1.5 M8 19 l8 -1.5" stroke-width="0.7"/>',
+ params:[F("D","القطر D","Diameter D",20,4),F("L","الطول L","Length L",60),F("pitch","خطوة اللولب pitch","Thread pitch",2.5,0.5),F("td","عمق اللولب td","Thread depth td",1.2,0.2)],
+ draw(g,p){const s=fit(p.L*1.4,p.D*1.5,140,300),D=p.D*s,L=p.L*s,x=200,y=110;
+  rect(g,x,y,D,L);
+  const turns=Math.floor(p.L/p.pitch),step=L/turns;
+  for(let i=0;i<turns;i++){const yy=y+i*step;path(g,`M${x} ${yy+step} l${D} ${-step*0.6}`,"var(--dim)",.7);}
+  dimV(g,y,y+L,x-32,p.L);dimH(g,x,x+D,y+L+28,dia(p.D));
+  txt(g,x+D+40,y+L/2,"pitch "+p.pitch,10,"var(--signal)","start");
+  txt(g,x+D/2,y-12,"cosmetic helix",10,"var(--dim)");},
+ json(p){return{schema:"0.5",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.D,height:p.L,name:"shaft"},
+  {op:"cosmetic_helix",diameter:p.D,pitch:p.pitch,depth:p.td,length:p.L,on:"shaft",name:"thread"},
+  {op:"note",text:"cosmetic thread — not load-bearing"},
+  {op:"save_part",path:"helix_shaft.SLDPRT"}]};}},
+];
+window.__PARTS.push(...MORE6);
+/* ═══════════ BATCH 7 — طلب السوق (3) ═══════════ */
+const MORE7=[
+{id:"handwheel",code:"L-24",grp:"lathe",
+ name:{ar:"عجلة يد (Handwheel)",en:"Handwheel"},
+ icon:'<circle cx="14" cy="13" r="10"/><circle cx="14" cy="13" r="3.2"/><circle cx="14" cy="6" r="1.6"/><circle cx="20.5" cy="16.5" r="1.6"/><circle cx="7.5" cy="16.5" r="1.6"/>',
+ params:[F("D","قطر العجلة D","Wheel dia D",120,6),F("T","سماكة القرص T","Disc thk T",14),F("hd","قطر الصُرّة hd","Hub dia hd",40),F("hw","طول الصُرّة hw","Hub len hw",22),F("b","التجويف b","Bore b",14),F("kw","خابور kw (0=بدون)","Key kw (0=none)",5,0),F("n","ثقوب تخفيف n","Lightening n",3,0),F("ld","قطر التخفيف ld","Lighten dia ld",22,2)],
+ draw(g,p){const s=fit(p.D*1.7,p.D,410,300),R=p.D*s/2,cx=228,cy=200;
+  circ(g,cx,cy,R);circ(g,cx,cy,p.hd*s/2);circ(g,cx,cy,p.b*s/2);center(g,cx,cy,R);
+  const pr=(p.D+p.hd)/4*s;
+  if(p.n>0){circ(g,cx,cy,pr,"5 4");
+   for(let i=0;i<p.n;i++){const a=i*2*Math.PI/p.n-Math.PI/2;
+    circ(g,cx+Math.cos(a)*pr,cy+Math.sin(a)*pr,p.ld*s/2);}}
+  if(p.kw>0){const br=p.b*s/2;path(g,`M${cx-p.kw*s/2} ${cy-br} v${-p.kw*s*0.6} h${p.kw*s} v${p.kw*s*0.6}`,"var(--ink)",1.2);}
+  dimH(g,cx-R,cx+R,cy+R+32,dia(p.D));txt(g,cx,cy+4,dia(p.b),10);
+  if(p.n>0)txt(g,cx,cy-pr-p.ld*s/2-8,p.n+"× "+dia(p.ld),10);
+  const sx=cx+R+56,t=p.T*s,hw=p.hw*s,hR=p.hd*s/2;
+  path(g,`M${sx} ${cy-R} h${t} v${R-hR} h${hw} v${2*hR} h${-hw} v${R-hR} h${-t} z`);
+  thin(g,sx,cy-p.b*s/2,sx+t+hw,cy-p.b*s/2);thin(g,sx,cy+p.b*s/2,sx+t+hw,cy+p.b*s/2);
+  axis(g,sx,sx+t+hw,cy);dimH(g,sx,sx+t,cy+R+32,p.T);dimH(g,sx+t,sx+t+hw,cy+R+32,p.hw);},
+ json(p){const cmds=[
+  {op:"create_cylinder",diameter:p.D,height:p.T,name:"disc"},
+  {op:"create_sketch",on:{face:{of_feature:"disc",facing:"+z"}},name:"hs"},
+  {op:"draw_circle",sketch:"hs",diameter:p.hd,at:"center"},
+  {op:"extrude",sketch:"hs",depth:p.hw,name:"hub"},
+  {op:"hole",diameter:p.b,through:true,on:{face:{of_feature:"hub",facing:"+z"}},at:"center"}];
+  if(p.n>0){cmds.push(
+   {op:"hole",diameter:p.ld,through:true,on:{face:{of_feature:"disc",facing:"+z"}},at:{r:(p.D+p.hd)/4,theta_deg:0},name:"lt"},
+   {op:"circular_pattern",of_feature:"lt",count:p.n,equal_spacing:true});}
+  if(p.kw>0){cmds.push(
+   {op:"create_plane",offset_from:"top",distance:p.b/2,name:"kp"},
+   {op:"create_sketch",on:{plane:"kp"},name:"ks"},
+   {op:"draw_rectangle",sketch:"ks",width:p.T+p.hw,height:p.kw,at:{u:0,v:-p.kw/2}},
+   {op:"cut",sketch:"ks",depth:p.kw*0.5,name:"keyway"});}
+  cmds.push({op:"save_part",path:"handwheel.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+
+{id:"threadinsert",code:"L-25",grp:"lathe",
+ name:{ar:"جلبة إصلاح قلاووظ",en:"Thread repair bushing"},
+ icon:'<circle cx="14" cy="13" r="9"/><circle cx="14" cy="13" r="4.5"/><path d="M5.5 10 l17 0 M5.5 13 l17 0 M5.5 16 l17 0" stroke-width="0.6"/>',
+ params:[F("Mo","القلاووظ الخارجي M","External M",16,4),F("Mi","القلاووظ الداخلي M","Internal M",10,2),F("L","الطول L","Length L",20,3)],
+ draw(g,p){const OD=p.Mo,ID=p.Mi*0.85;
+  const s=fit(OD*2.4,OD,320,240),R=OD*s/2,ir=ID*s/2,cx=205,cy=190;
+  circ(g,cx,cy,R);circ(g,cx,cy,ir);circ(g,cx,cy,R*0.92,"2 2");circ(g,cx,cy,p.Mi*s/2,"2 2");
+  center(g,cx,cy,R);
+  txt(g,cx,cy-R-12,"M"+p.Mo+" ext",11);txt(g,cx,cy+4,"M"+p.Mi,10);
+  const sx=cx+R+66,h=p.L*s;rect(g,sx,cy-R,h,2*R);
+  for(let gx=sx;gx<sx+h;gx+=4){thin(g,gx,cy-R,gx,cy-R+5);thin(g,gx,cy+R-5,gx,cy+R);}
+  thin(g,sx,cy-ir,sx+h,cy-ir);thin(g,sx,cy+ir,sx+h,cy+ir);
+  dimH(g,sx,sx+h,cy+R+30,p.L);
+  txt(g,cx,cy+R+52,"repairs stripped M"+p.Mi+" hole",10,"var(--dim)");},
+ json(p){return{schema:"0.2",units:"mm",commands:[
+  {op:"create_cylinder",diameter:p.Mo,height:p.L,name:"body"},
+  {op:"hole",diameter:p.Mi*0.85,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"},
+  {op:"chamfer",distance:0.8,edges:{select:"top_loop",of_feature:"body"}},
+  {op:"note",text:"thread ext M"+p.Mo+" full length; tap int M"+p.Mi},
+  {op:"save_part",path:"thread_insert.SLDPRT"}]};}},
+
+{id:"flangenut",code:"K-20",grp:"mach",
+ name:{ar:"صامولة بفلنجة",en:"Flanged nut"},
+ icon:'<circle cx="14" cy="15" r="9"/><path d="M14 4 l6 3.5 v7 l-6 3.5 l-6 -3.5 v-7 z"/><circle cx="14" cy="11" r="3"/>',
+ params:[F("M","القلاووظ M","Thread M",10,2),F("s","عرض المفتاح s","Across flats s",15,4),F("H","الارتفاع الكلي H","Total ht H",10),F("fd","قطر الفلنجة fd","Flange dia fd",22,5),F("ft","سماكة الفلنجة ft","Flange thk ft",3,1)],
+ draw(g,p){const sc=fit(p.fd*2.2,p.fd,320,250),FR=p.fd*sc/2,S=p.s*sc,R=S/Math.sqrt(3),cx=205,cy=190;
+  circ(g,cx,cy,FR);
+  let d="M";for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;
+   d+=(i?"L":"")+(cx+R*Math.cos(a)).toFixed(1)+" "+(cy+R*Math.sin(a)).toFixed(1)+" ";}
+  path(g,d+"Z");circ(g,cx,cy,p.M*sc/2*0.85,"3 3");center(g,cx,cy,FR);
+  dimH(g,cx-FR,cx+FR,cy+FR+28,dia(p.fd));txt(g,cx,cy-FR-10,"M"+p.M+" · s="+p.s,11);
+  const sx=cx+FR+62,h=p.H*sc,ft=p.ft*sc;
+  path(g,`M${sx} ${cy-FR} h${ft} v${FR-S/2} h${h-ft} v${S} h${-(h-ft)} v${FR-S/2} h${-ft} z`);
+  dimH(g,sx,sx+h,cy+FR+28,p.H);dimH(g,sx,sx+ft,cy-FR-12,p.ft);},
+ json(p){const R=p.s/Math.sqrt(3),cmds=[
+  {op:"create_cylinder",diameter:p.fd,height:p.ft,name:"flange"},
+  {op:"create_sketch",on:{face:{of_feature:"flange",facing:"+z"}},name:"bs"},
+  {op:"draw_circle",sketch:"bs",diameter:2*R,at:"center"},
+  {op:"extrude",sketch:"bs",depth:p.H-p.ft,name:"body"},
+  {op:"hole",diameter:p.M*0.85,through:true,on:{face:{of_feature:"body",facing:"+z"}},at:"center"}];
+  for(let i=0;i<6;i++)cmds.push(
+   {op:"create_plane",offset_from:"front",distance:p.s/2,rotate_deg:i*60,name:"f"+i},
+   {op:"create_sketch",on:{plane:"f"+i},name:"fs"+i},
+   {op:"draw_rectangle",sketch:"fs"+i,width:2*R,height:p.H-p.ft,at:{u:-R,v:p.ft}},
+   {op:"cut",sketch:"fs"+i,depth:R-p.s/2+1,name:"c"+i});
+  cmds.push({op:"note",text:"tapped M"+p.M},{op:"save_part",path:"flange_nut.SLDPRT"});
+  return{schema:"0.2",units:"mm",commands:cmds};}},
+];
+window.__PARTS.push(...MORE7);
+</script>
+
+<script>
+/* ============ NEW: in-memory stores (no browser storage — artifact-safe) ============ */
+let favs=new Set(), presets={}, batch=[];
+
+/* generic DFM sanity checks — broadened coverage */
+function dfmCheck(part,v){
+ const w=[];const has=k=>k in v;const g=k=>v[k];
+ const ar=lang==="ar";
+ // collect all "outer envelope" candidates and all "hole/inner" candidates by naming
+ const outerKeys=part.params.map(p=>p.k).filter(k=>/^(OD|D|D1|D2|L|W|A|B|bw|bd|s|H|hd)$/.test(k));
+ const innerKeys=part.params.map(p=>p.k).filter(k=>/^(ID|id|b|Bb|sb|pd|cb)$/.test(k));
+ // 1) any inner dimension >= the smallest relevant outer dimension
+ innerKeys.forEach(ik=>{
+   if(!has(ik))return;
+   // find a sensible outer companion
+   let pair=null;
+   if(ik==="ID"&&has("OD"))pair="OD";
+   else if((ik==="b"||ik==="id")&&has("OD"))pair="OD";
+   else if((ik==="b")&&has("D"))pair="D";
+   else if(ik==="B"&&has("bw"))pair="bw";
+   else if(ik==="Bb"&&has("BD"))pair="BD";
+   else if(ik==="sb"&&has("bd"))pair="bd";
+   else if(ik==="pd"&&has("D"))pair="D";
+   if(pair&&g(ik)>=g(pair))w.push((ar?"القطر الداخلي ":"Inner ")+ik+"="+g(ik)+" ≥ "+pair+"="+g(pair));
+ });
+ // 2) hole vs plate envelope (through-hole must fit)
+ const holeK=part.params.find(p=>/^d$/.test(p.k)||/hole/i.test(p.ar+p.en));
+ if(holeK&&has(holeK.k)){["L","W","B","bw","A"].forEach(k=>{if(has(k)&&g(holeK.k)>=g(k))w.push((ar?"الثقب ":"Hole ")+g(holeK.k)+(ar?" أكبر من ":" ≥ ")+k+"="+g(k));});}
+ // 3) edge margin vs hole radius
+ if(has("m")&&holeK&&has(holeK.k)&&g("m")<g(holeK.k)/2)w.push(ar?"إزاحة الحافة أصغر من نصف قطر الثقب — خطر كسر":"Edge margin < hole radius — blowout risk");
+ // 4) bolt circle must sit inside OD and outside bore
+ if(has("BCD")){if(has("OD")&&g("BCD")>=g("OD"))w.push(ar?"دائرة البراغي ≥ القطر الخارجي":"BCD ≥ OD");
+   if(has("ID")&&g("BCD")<=g("ID"))w.push(ar?"دائرة البراغي ≤ القطر الداخلي":"BCD ≤ ID");
+   if(has("bd")&&has("OD")&&g("BCD")+g("bd")>=g("OD"))w.push(ar?"ثقوب البراغي بتتجاوز الحافة الخارجية":"Bolt holes cross outer edge");}
+ // 5) counterbore/pocket depth vs thickness
+ if(has("cd")&&has("T")&&g("cd")>=g("T"))w.push(ar?"عمق الغطس ≥ السماكة":"Counterbore depth ≥ thickness");
+ if(has("bh")&&has("H")&&g("bh")>=g("H"))w.push(ar?"عمق التجويف ≥ الارتفاع":"Bore depth ≥ height");
+ // groove depth vs width only when groove is radial (has gw width partner), skip axial grooves
+ if(has("gd")&&has("gw")&&g("gd")>=g("gw")*4)w.push(ar?"عمق الحز كبير جداً بالنسبة لعرضه":"Groove very deep vs width");
+ // 6) stepped diameters sanity (d1<d2 expected order not enforced, but equal is suspicious)
+ if(has("d1")&&has("d2")&&g("d1")===g("d2"))w.push(ar?"قطرا الدرجتين متساويان — لا توجد درجة":"Both step diameters equal — no step");
+ // 7) slot geometry
+ if(has("sl")&&has("sw")&&g("sw")>=g("sl"))w.push(ar?"عرض الفتحة ≥ طولها — مش فتحة":"Slot width ≥ length — not a slot");
+ if(has("sl")&&has("L")&&g("sl")>=g("L"))w.push(ar?"الفتحة أطول من القطعة":"Slot longer than part");
+ // 8) gear undercut
+ if(has("z")&&g("z")<17&&(!has("pa")||g("pa")>=20))w.push(ar?"عدد الأسنان <17 — احتمال undercut (تدنية سفلية)":"z<17 — undercut likely");
+ if(has("z1")&&g("z1")<17)w.push(ar?"الترس الصغير <17 سن — undercut":"Pinion z1<17 — undercut");
+ // 9) wall thickness left after bore
+ if(has("OD")&&has("ID")&&(g("OD")-g("ID"))/2<1.5)w.push(ar?"سماكة الجدار <1.5مم — ضعيفة":"Wall <1.5mm — fragile");
+ if(has("OD")&&has("b")&&(g("OD")-g("b"))/2<1.5)w.push(ar?"سماكة الجدار <1.5مم — ضعيفة":"Wall <1.5mm — fragile");
+ // 10) very thin sheet flag (informational)
+ if(has("T")&&g("T")<1)w.push(ar?"سماكة أقل من 1مم — تحقق من التصنيع":"Thickness <1mm — verify process");
+ return [...new Set(w)];
+}
+
+/* ============ state & render ============ */
+let cur=null,vals={},query="";
+const $=id=>document.getElementById(id);
+function allParts(){return window.__PARTS;}
+function buildRail(){
+ const rail=$("rail");rail.innerHTML="";
+ const t=I18N[lang];
+ const mkBtn=p=>{const b=document.createElement("button");b.className="part"+(p===cur?" on":"");
+   b.innerHTML=`<svg width="30" height="27" viewBox="0 0 28 26">${p.icon}</svg>
+    <span><span class="pname">${favs.has(p.id)?"★ ":""}${p.name[lang]}</span><small>${p.code} · ${p.id}.json</small></span>`;
+   b.onclick=()=>{cur=p;vals={};buildRail();buildForm();render();};return b;};
+ // favorites section first
+ const favItems=allParts().filter(p=>favs.has(p.id)&&(!query||p.name.ar.includes(query)||p.name.en.toLowerCase().includes(query.toLowerCase())));
+ if(favItems.length){const h=document.createElement("div");h.className="ledger-h";
+  h.innerHTML=`<span>★ ${lang==="ar"?"المفضّلة":"Favorites"}</span><b>${favItems.length}</b>`;rail.appendChild(h);
+  favItems.forEach(p=>rail.appendChild(mkBtn(p)));}
+ ["lathe","mill","mach","fix","gears"].forEach(grp=>{
+  const items=allParts().filter(p=>p.grp===grp&&(!query||p.name.ar.includes(query)||p.name.en.toLowerCase().includes(query.toLowerCase())||p.id.includes(query)));
+  if(!items.length)return;
+  const h=document.createElement("div");h.className="ledger-h";
+  h.innerHTML=`<span>${t.groups[grp]}</span><b>${items.length}</b>`;rail.appendChild(h);
+  items.forEach(p=>rail.appendChild(mkBtn(p)));});
+}
+function buildForm(){
+ $("partTitle").textContent=cur.name[lang];
+ $("partSub").textContent=cur.code+" — swpilot run "+cur.id+".json";
+ const f=$("fields");f.innerHTML="";
+ cur.params.forEach(pr=>{
+  vals[pr.k]=vals[pr.k]??pr.def;
+  const d=document.createElement("div");d.className="field";
+  d.innerHTML=`<label><span>${lang==="ar"?pr.ar:pr.en}</span><code>${pr.k}</code></label>
+   <div class="inwrap"><input inputmode="decimal" value="${vals[pr.k]}" data-k="${pr.k}"><span class="unit">mm</span></div><div class="hint"></div>`;
+  const inp=d.querySelector("input");
+  inp.oninput=()=>{const v=parseFloat(inp.value);
+   if(isNaN(v)||v<pr.min){inp.classList.add("bad");d.querySelector(".hint").textContent=I18N[lang].err+" — "+I18N[lang].min+" "+pr.min;}
+   else{inp.classList.remove("bad");d.querySelector(".hint").textContent="";vals[pr.k]=v;render();}};
+  f.appendChild(d);});
+}
+function render(){
+ const svg=$("sheet");svg.innerHTML="";
+ svg.appendChild(svgDefs());
+ const g=el("g",{});svg.appendChild(g);
+ frame(g,cur);
+ try{cur.draw(g,vals);}catch(e){txt(g,380,270,"draw error: "+e.message,12,"#c8452e");}
+ $("jsonOut").textContent=JSON.stringify(swTranslate(cur.json(vals)).file,null,2);
+ // DFM warnings
+ const w=dfmCheck(cur,vals);const box=$("dfmWarn");
+ if(w.length){box.style.display="block";box.innerHTML="<b>⚠ "+(lang==="ar"?"تنبيهات تصنيعية:":"DFM warnings:")+"</b><br>"+w.join("<br>");}
+ else box.style.display="none";
+ // favorite state
+ $("favBtn").textContent=favs.has(cur.id)?"★":"☆";$("favBtn").classList.toggle("on",favs.has(cur.id));
+ renderPresets();
+ // if 3D is active, rebuild it for the new part / new dimensions
+
+}
+function renderPresets(){
+ const box=$("presetList");box.innerHTML="";
+ const mine=presets[cur.id]||[];
+ mine.forEach((pr,i)=>{
+  const c=document.createElement("span");c.className="preset-chip";
+  c.innerHTML=`<b>${pr.name}</b><span class="x">✕</span>`;
+  c.querySelector("b").onclick=()=>{vals={...pr.vals};buildForm();render();toast(lang==="ar"?"تم التحميل":"Loaded");};
+  c.querySelector(".x").onclick=(e)=>{e.stopPropagation();mine.splice(i,1);renderPresets();};
+  box.appendChild(c);});
+}
+function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1600);}
+$("dlBtn").onclick=()=>{const blob=new Blob([JSON.stringify(swTranslate(cur.json(vals)).file,null,2)],{type:"application/json"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=cur.id+".json";a.click();toast(I18N[lang].saved);};
+$("cpBtn").onclick=async()=>{await navigator.clipboard.writeText(JSON.stringify(swTranslate(cur.json(vals)).file,null,2));toast(I18N[lang].copied);};
+/* favorite toggle */
+$("favBtn").onclick=()=>{if(favs.has(cur.id))favs.delete(cur.id);else favs.add(cur.id);
+ buildRail();render();toast(favs.has(cur.id)?(lang==="ar"?"أُضيف للمفضّلة":"Favorited"):(lang==="ar"?"أُزيل":"Removed"));};
+/* save preset */
+$("saveBtn").onclick=()=>{const nm=$("presetName").value.trim();if(!nm){toast(lang==="ar"?"اكتب اسماً":"Enter a name");return;}
+ (presets[cur.id]=presets[cur.id]||[]).push({name:nm,vals:{...vals}});$("presetName").value="";renderPresets();toast(lang==="ar"?"تم الحفظ":"Saved");};
+/* batch add */
+$("batchBtn").onclick=()=>{batch.push({code:cur.code,id:cur.id,json:swTranslate(cur.json(vals)).file});updateBatch();toast(lang==="ar"?"أُضيف للسلة":"Added to batch");};
+function updateBatch(){$("batchCount").textContent=(lang==="ar"?"سلة التصدير: ":"Batch: ")+batch.length;
+ $("batchbar").classList.toggle("show",batch.length>0);}
+$("batchClear").onclick=()=>{batch=[];updateBatch();};
+$("batchDl").onclick=()=>{
+ // bundle as one JSON file with all parts (portable, no zip lib needed)
+ const bundle={schema:"bundle-1.0",generated:new Date().toISOString(),count:batch.length,
+  parts:batch.map(b=>({code:b.code,file:b.id+".json",commandfile:b.json}))};
+ const blob=new Blob([JSON.stringify(bundle,null,2)],{type:"application/json"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="swpilot_batch_"+batch.length+"parts.json";a.click();
+ toast(lang==="ar"?"تم تنزيل السلة":"Batch downloaded");};
+$("genBtn").onclick=()=>{const d=document.querySelector("details");d.open=true;d.scrollIntoView({behavior:"smooth"});};
+$("q").oninput=e=>{query=e.target.value.trim();buildRail();};
+$("gearBtn").onclick=e=>{e.stopPropagation();$("pop").classList.toggle("open");};
+document.body.onclick=e=>{if(!$("pop").contains(e.target)&&e.target!==$("gearBtn"))$("pop").classList.remove("open");};
+function setLang(l){
+ lang=l;document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";
+ $("btnAr").classList.toggle("on",l==="ar");$("btnEn").classList.toggle("on",l==="en");
+ const t=I18N[l];
+ $("tagline").textContent=t.tagline;$("genBtn").textContent=t.gen;
+ $("dlBtn").textContent=t.dl;$("cpBtn").textContent=t.cp;
+ $("bridgeNote").textContent=t.bridge;$("figcap").textContent=t.fig;
+ $("sendBtnTxt").textContent=(BI18N[l]||BI18N.ar).send;
+ if(typeof bridgeHealth==="function")bridgeHealth();
+ $("jsonSum").textContent=t.jsonSum;$("q").placeholder=t.search;
+ $("saveBtn").textContent=lang==="ar"?"حفظ":"Save";
+ $("presetName").placeholder=lang==="ar"?"احفظ المقاسات باسم…":"Save dimensions as…";
+ $("batchClear").textContent=lang==="ar"?"تفريغ":"Clear";
+ $("batchDl").textContent=lang==="ar"?"تنزيل الكل (ZIP)":"Download all";
+ $("favBtn").title=lang==="ar"?"مفضّلة":"Favorite";$("batchBtn").title=lang==="ar"?"أضف لسلة التصدير":"Add to batch";
+ $("printBtn").title=lang==="ar"?"طباعة الرسمة":"Print sheet";$("shareBtn").title=lang==="ar"?"مشاركة برابط":"Share link";
+ if(typeof renderTools==="function"&&$("tooldrawer").classList.contains("open"))renderTools();else if(typeof TOOLI18N!=="undefined")$("toolsBtnT").textContent=TOOLI18N[lang].btn;
+ updateBatch();
+ buildRail();buildForm();render();}
+$("btnAr").onclick=()=>setLang("ar");$("btnEn").onclick=()=>setLang("en");
+
+/* ============ theme toggle ============ */
+$("themeBtn").onclick=()=>{document.body.classList.toggle("light");
+ };
+
+/* ============ print ============ */
+$("printBtn").onclick=()=>{
+ const svg=$("sheet").outerHTML;
+ const w=window.open("","_print","width=900,height=650");
+ w.document.write(`<html><head><title>${cur.name[lang]} — ${cur.code}</title>
+  <style>body{margin:0;background:#fff;display:flex;align-items:center;justify-content:center;height:100vh}
+  svg{width:96%;max-width:1000px;background:#F4EFE4;border:1px solid #ccc;
+    --ink:#1B2431;--signal:#255074;--dim:#9C8F73;--steel:#5E6B7E;--line:#C9BFA8;}</style></head>
+  <body>${svg}</body></html>`);
+ w.document.close();setTimeout(()=>{w.print();},300);};
+
+/* ============ share by link (encodes part + dims in URL hash) ============ */
+$("shareBtn").onclick=async()=>{
+ const state={p:cur.id,v:vals};
+ const hash=btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+ const url=location.origin+location.pathname+"#"+hash;
+ try{await navigator.clipboard.writeText(url);toast(lang==="ar"?"نُسخ رابط القطعة ✓":"Share link copied ✓");}
+ catch(e){prompt(lang==="ar"?"انسخ الرابط:":"Copy link:",url);}};
+function loadFromHash(){
+ if(!location.hash||location.hash.length<4)return false;
+ try{const st=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(1)))));
+  const p=allParts().find(x=>x.id===st.p);if(!p)return false;
+  cur=p;vals={...st.v};return true;}catch(e){return false;}}
+
+/* ============ 3D preview — real solids with bores + mouse control ============ */
+function sel(opts,val){const s=document.createElement("select");s.className="tsel";
+ Object.entries(opts).forEach(([k,v])=>{const o=document.createElement("option");o.value=k;o.textContent=v;s.appendChild(o);});
+ if(val)s.value=val;return s;}
+function num(v,ph){const i=document.createElement("input");i.className="tin";i.inputMode="decimal";i.value=v??"";i.placeholder=ph||"";return i;}
+function card(h){const c=document.createElement("div");c.className="tcard";c.innerHTML=`<h4>${h}</h4>`;return c;}
+function row(...els){const r=document.createElement("div");r.className="trow";els.forEach(e=>r.appendChild(e));return r;}
+function res(){const d=document.createElement("div");d.className="tres";return d;}
+
+function toolRPM(body,T){const t=T.rpm,c=card(t.h);
+ const mat=sel(t.mats,"steel"),tool=sel({hss:"HSS",carb:lang==="ar"?"كربيد":"Carbide"},"hss"),dia=num(20,t.dia);
+ const out=res();
+ const upd=()=>{const D=parseFloat(dia.value)||0;const vc=VC[mat.value][tool.value==="carb"?1:0];
+  out.innerHTML=t.res(calcRPM(vc,D),drillFeed(D));};
+ [mat,tool,dia].forEach(e=>e.oninput=upd);
+ c.appendChild(row(mat,tool));c.appendChild(row(dia));c.appendChild(out);body.appendChild(c);upd();}
+
+function toolTap(body,T){const t=T.tap,c=card(t.h);
+ let h=`<table class="ttable"><tr>${t.cols.map(x=>`<th>${x}</th>`).join("")}</tr>`;
+ Object.entries(TAPD).forEach(([m,[p,td,cc,cn,cl]])=>{
+  h+=`<tr><td>M${m}</td><td>${p}</td><td><b>${td}</b></td><td>${cc}</td><td>${cn}</td><td>${cl}</td></tr>`;});
+ h+=`</table><div class="tnote">${t.note}</div>`;
+ c.insertAdjacentHTML("beforeend",h);body.appendChild(c);}
+
+function toolFit(body,T){const t=T.fit,c=card(t.h);
+ const nom=num(20,t.nom),type=sel(t.types,"g6");const out=res();
+ const upd=()=>{const n=parseFloat(nom.value)||0;if(n<1||n>120){out.innerHTML="1–120 mm";return;}
+  const f=fitLimits(n,type.value);
+  const cmin=f.holeLo-f.shHi, cmax=f.holeHi-f.shLo;
+  out.innerHTML=t.res(n,f,cmin,cmax);};
+ [nom,type].forEach(e=>e.oninput=upd);
+ c.appendChild(row(nom,type));c.appendChild(out);body.appendChild(c);upd();}
+
+function toolBolt(body,T){const t=T.bolt,c=card(t.h);
+ const n=num(6,t.n),bcd=num(90,t.bcd),st=num(0,t.start);const out=document.createElement("div");
+ const upd=()=>{const N=parseInt(n.value)||0,B=parseFloat(bcd.value)||0,S=parseFloat(st.value)||0;
+  if(N<1||N>36||B<=0){out.innerHTML="";return;}
+  const pts=boltXY(N,B,S);
+  let h=`<table class="ttable"><tr>${t.cols.map(x=>`<th>${x}</th>`).join("")}</tr>`;
+  pts.forEach((p,i)=>h+=`<tr><td>${i+1}</td><td>${p[0]}</td><td>${p[1]}</td></tr>`);
+  h+=`</table><div class="tnote">${t.note}</div>`;out.innerHTML=h;};
+ [n,bcd,st].forEach(e=>e.oninput=upd);
+ c.appendChild(row(n,bcd,st));c.appendChild(out);body.appendChild(c);upd();}
+
+function toolStock(body,T){const t=T.stock,c=card(t.h);
+ const shape=sel(t.shapes,"round"),mat=sel(t.mats,"steel");
+ const d1=num(30,t.d1),d2=num("",t.d2),L=num(200,t.L);const out=res();
+ const upd=()=>{const kg=stockWeight(shape.value,parseFloat(d1.value)||0,parseFloat(d2.value)||0,parseFloat(L.value)||0,mat.value);
+  out.innerHTML=t.res(kg);
+  d2.style.display=(shape.value==="tube"||shape.value==="plate")?"":"none";};
+ [shape,mat,d1,d2,L].forEach(e=>e.oninput=upd);
+ c.appendChild(row(shape,mat));c.appendChild(row(d1,d2,L));c.appendChild(out);body.appendChild(c);upd();}
+
+function toolTri(body,T){const t=T.tri;
+ const c1=card(t.h);
+ const a=num("", "a"),b=num("","b"),cc=num("","c"),A=num("","A°");const out=res();
+ const upd=()=>{const r=triSolve(parseFloat(a.value),parseFloat(b.value),parseFloat(cc.value),parseFloat(A.value));
+  out.innerHTML=r?`a=${r.a} · b=${r.b} · c=${r.c}<br>A=${r.A}° · B=${r.B}°`:"—";};
+ [a,b,cc,A].forEach(e=>e.oninput=upd);
+ c1.appendChild(row(a,b,cc,A));c1.appendChild(out);
+ c1.insertAdjacentHTML("beforeend",`<div class="tnote">${t.note}</div>`);
+ body.appendChild(c1);
+ const c2=card(t.inch);const v=num(1,""),dir=sel({mm:"in→mm",inch:"mm→in"},"mm");const o2=res();
+ const u2=()=>{const x=parseFloat(v.value)||0;o2.innerHTML=t.conv(x,dir.value==="mm");};
+ [v,dir].forEach(e=>e.oninput=u2);
+ c2.appendChild(row(v,dir));c2.appendChild(o2);body.appendChild(c2);u2();}
+
+/* ═══════════ BRIDGE: catalog → SolidWorks engine ═══════════
+   Talks to the local Sanay3i engine (swpilot bridge) via the
+   two-step contract: POST /v1/commandfile (preview+token) →
+   user confirms → POST /v1/execute {token}. Localhost only. */
+/* Same-origin when served by the bridge itself (http://127.0.0.1:8765/),
+   which avoids CORS entirely. From file:// we still try localhost, but
+   browsers block that — so the status line guides the user to the URL. */
+const BRIDGE_SAME_ORIGIN=location.protocol==="http:"||location.protocol==="https:";
+const BRIDGE_BASE=BRIDGE_SAME_ORIGIN?"":"http://127.0.0.1:8765";
+let bridgeUp=false, bridgeInfo=null, _pendingToken=null;
+
+/* ═══ swTranslate: catalog dialect → engine schema (v0.5) ═══
+   The engine (pydantic, extra="forbid") accepts an exact vocabulary.
+   This translator rewrites every command file the catalog emits into
+   that vocabulary, so ALL outputs (bridge, download, copy) are valid
+   engine CommandFiles. Facts it encodes (verified against schema.py):
+   • front plane normal = +Z → cylinders sketch on "front", extrude +Z
+   • FaceRef = {facing, of_feature?}; of_feature optional → default
+     "last boss" (catalog feature names don't exist engine-side → drop)
+   • hole.at = [[x,y],…]; cb fields = cb_diameter/cb_depth
+   • draw_slot start/end are the END-ARC CENTERS (len = |e-s| + width)
+   • revolve/revolve_cut need create_axis first; axis must lie in plane
+   • strip fields the engine forbids (name on plate/extrude/cut, sketch
+     refs on draw_*, etc.)                                            */
+const _FIELD_OK={ // per-op whitelist of fields the engine accepts (op excluded)
+ new_part:["name"],new_assembly:["name"],
+ create_sketch:["plane","on"],draw_circle:["center","diameter"],
+ draw_rectangle:["center","width","height"],draw_slot:["start","end","width"],
+ draw_line:["start","end","kind"],extrude:["depth","reverse"],
+ cut_extrude:["through_all","depth","reverse","draft_angle"],
+ revolve:["axis","angle","reverse"],revolve_cut:["axis","angle","reverse"],
+ helix_thread:["diameter","pitch","length","right_handed","on_feature"],
+ hole:["at","type","standard","diameter","cb_diameter","cb_depth","cs_diameter","cs_angle","on"],
+ create_plate:["width","height","thickness","plane"],
+ create_plane:["name","offset_from","distance"],create_axis:["axis"],
+ chamfer:["distance","angle","edges"],fillet:["radius","edges"],
+ linear_pattern:["features","direction","spacing","count","direction2"],
+ circular_pattern:["features","axis","count","total_angle","equal_spacing"],
+ add_corner_holes:["diameter","margin"],save_part:["path"],save_assembly:["path"],
+ insert_component:["part","file","envelope","name","at","rotate","fixed"],
+ mate:["type","a","b","value"],
+ involute_spur_gear:["module","teeth","pressure_angle","face_width","bore","hub_diameter","hub_length","keyway","name"],
+ internal_ring_gear:["module","teeth","face_width","rim_outer_diameter","name"],
+ sprocket_iso:["chain","teeth","face_width","bore","keyway","name"],
+};
+function _faceRef(on,nameMap){ // on:{face:{of_feature,facing}} → FaceRef ; on:{plane:name} → {__plane}
+ if(on==null)return undefined;
+ if(typeof on==="string")return undefined;
+ if(on.plane)return {__plane:on.plane};
+ const f=on.face||on;
+ if(f&&f.facing){
+   const r={facing:f.facing};
+   if(nameMap&&f.of_feature&&nameMap[f.of_feature])r.of_feature=nameMap[f.of_feature];
+   return r;
+ }
+ return undefined;
+}
+function _clean(op,cmd){ // keep only fields the engine accepts for this op
+ const ok=_FIELD_OK[op]||[]; const out={op};
+ for(const k of ok) if(cmd[k]!==undefined) out[k]=cmd[k];
+ return out;
+}
+function _atList(at){ // "center" | {u,v} | {r,theta_deg} | [x,y] | [[x,y],…] → [[x,y],…]
+ if(at==null||at==="center")return [[0,0]];
+ if(Array.isArray(at))return (Array.isArray(at[0])?at:[at]);
+ if(typeof at==="object"){
+   if(at.r!=null){const th=(at.theta_deg||0)*Math.PI/180;return [[+(at.r*Math.cos(th)).toFixed(4),+(at.r*Math.sin(th)).toFixed(4)]];}
+   return [[at.u||0,at.v||0]];
+ }
+ return [[0,0]];
+}
+function _edgesClean(e){ // drop catalog feature names from edge selectors → default resolution
+ if(e==null)return e;
+ if(typeof e==="object"){const o={...e};delete o.of_feature;return o;}
+ return e;
+}
+function _dir(d){ // catalog "+x" → engine "x" ; "-x" stays
+ if(!d)return d; return d[0]==="+"?d.slice(1):d;
+}
+const _PLANE_MAP={bottom:["top",-1],back:["front",-1],left:["right",-1]};
+function swTranslate(cmdfile){
+ const src=(cmdfile&&cmdfile.commands)||[];
+ const out=[]; const notes=[]; let axes=new Set(); let sawPart=false, sawSolid=false;
+ let bossN=0, cutN=0;
+ const nameMap={};
+ let lastFaceSign=null;
+ let plate=null;
+ let sk=null;
+ const planeSign={};                   // مستويات منشأة: إشارة المسافة (لعكس القص)
+ const comps=[];                       // القطع المُدرجة بالتجميع (لتركيب mate)
+ swTranslate._ic={};                   // عداد النسخ لكل قطعة (pinion_1, wheel_1…)
+ let pend=[];                          // كيانات السكتش الحالية (لتضخيم القص الممتد بكامل البعد)
+ const off=(x,y)=>plate?[x-plate.w/2,y-plate.h/2]:[x,y];
+ const offAt=(lst)=>lst.map(([x,y])=>off(x,y));
+ const ensurePart=()=>{ if(!sawPart){out.push({op:"new_part"});sawPart=true;} };
+ const ensureAxis=(ax)=>{ if(!axes.has(ax)){out.push({op:"create_axis",axis:ax});axes.add(ax);} };
+ const addBoss=(catName)=>{bossN++;if(catName)nameMap[catName]="Boss-Extrude"+bossN;};
+ const addCut=(catName,n)=>{cutN+=(n||1);if(catName)nameMap[catName]="Cut-Extrude"+cutN;};
+ const featName=(cat)=>nameMap[cat]||("Cut-Extrude"+cutN);
+ const _fixRevolvePlane=(ax)=>{ // محور التدوير لازم داخل مستوى السكتش
+   if(!sk)return;
+   const normalOf={front:"z",top:"y",right:"x"};
+   if(normalOf[sk.family]!==ax)return;      // سليم أصلاً
+   if(ax!=="z")return;                       // الكتالوج بيستعمل z بس
+   out[sk.outIdx]={op:"create_sketch",plane:"right"}; // right يحوي z
+   for(const i of sk.ents){ const e=out[i];  // (x,y)→(u,v)=(-y,x)
+     const T=p=>[-p[1],p[0]];
+     if(e.start){e.start=T(e.start);e.end=T(e.end);}
+     if(e.center)e.center=T(e.center);
+   }
+   sk.family="right";
+ };
+ const flushCutInflate=()=>{ // قص مستطيل بيمتد بكامل بُعد الصفيحة → ضخّمه 1mm ليقطع فعلاً
+   if(!plate)return;
+   for(const e of pend){
+     if(e.op==="draw_rectangle"){
+       if(Math.abs(e.width -plate.w)<0.01)e.width =plate.w+2;
+       if(Math.abs(e.height-plate.h)<0.01)e.height=plate.h+2;
+     }
+   }
+ };
+ for(const c of src){
+  const op=c.op;
+  switch(op){
+   case "new_part": case "new_assembly": sawPart=true; out.push(_clean(op,c)); break;
+   case "create_plate": ensurePart(); out.push(_clean(op,c)); sawSolid=true; addBoss(c.name);
+     plate={w:c.width,h:c.height}; lastFaceSign=null; pend=[]; break;
+   case "create_cylinder": {
+     ensurePart();
+     out.push({op:"create_sketch",plane:"front"});
+     out.push({op:"draw_circle",diameter:c.diameter});
+     out.push({op:"extrude",depth:c.height});
+     sawSolid=true; addBoss(c.name); plate=null; lastFaceSign=null; pend=[]; break; }
+   case "create_cone": {
+     ensurePart(); ensureAxis("z");
+     const h=c.height;
+     out.push({op:"create_sketch",plane:"right"});
+     if(c.base_diameter!=null){ // مخروط مقطوع مصمت: قاعدة R1 → قمة R2
+       const R1=c.base_diameter/2, R2=c.top_diameter!=null?c.top_diameter/2:0.5;
+       out.push({op:"draw_line",start:[0,0],end:[0,R1]});
+       out.push({op:"draw_line",start:[0,R1],end:[-h,R2]});
+       out.push({op:"draw_line",start:[-h,R2],end:[-h,0]});
+       out.push({op:"draw_line",start:[-h,0],end:[0,0]});
+     }else{ // وردة/جدار مخروطي: {outer,inner,wall}
+       const Ro=c.outer_diameter/2, Ri=c.inner_diameter/2, t=c.wall||Math.max(1,(Ro-Ri)*0.15);
+       out.push({op:"draw_line",start:[0,Ri],end:[0,Ro]});
+       out.push({op:"draw_line",start:[0,Ro],end:[-h,Ri+t]});
+       out.push({op:"draw_line",start:[-h,Ri+t],end:[-h,Ri]});
+       out.push({op:"draw_line",start:[-h,Ri],end:[0,Ri]});
+     }
+     out.push({op:"revolve",axis:"z"});
+     sawSolid=true; addBoss(c.name); plate=null; pend=[]; break; }
+   case "cut": {
+     flushCutInflate();
+     const cc={op:"cut_extrude"};
+     if(c.depth!=null){cc.through_all=false;cc.depth=c.depth;} else cc.through_all=true;
+     if(lastFaceSign==="+")cc.reverse=true;
+     if(c.reverse)cc.reverse=!cc.reverse;
+     out.push(cc); addCut(c.name); pend=[]; break; }
+   case "slot": {
+     const onRef=_faceRef(c.on,nameMap);
+     out.push(onRef?{op:"create_sketch",on:onRef}:{op:"create_sketch",plane:"front"});
+     const L=c.length,W=c.width;
+     const [cx,cy]=off((c.at&&c.at.u)||0,(c.at&&c.at.v)||0);
+     const half=(L-W)/2;
+     out.push({op:"draw_slot",start:[cx-half,cy],end:[cx+half,cy],width:W});
+     const cc={op:"cut_extrude"};
+     if(c.through===false&&c.depth!=null){cc.through_all=false;cc.depth=c.depth;}
+     if(onRef&&onRef.facing&&onRef.facing[0]==="+")cc.reverse=true;
+     out.push(cc); addCut(c.name); lastFaceSign=null; pend=[]; break; }
+   case "cb_hole": {
+     const h={op:"hole",type:"counterbore",diameter:c.hole_dia,
+              cb_diameter:c.cbore_dia,cb_depth:c.cbore_depth,at:(c.at==null||c.at==="center")?_atList(c.at):offAt(_atList(c.at))};
+     const onRef=_faceRef(c.on,nameMap); if(onRef)h.on=onRef;
+     out.push(h); addCut(c.name, 2*_atList(c.at).length); break; }
+   case "draw_polygon": {
+     const pts=(c.points||[]).map(p=>off(p[0],p[1]));
+     for(let i=0;i<pts.length;i++){
+       const a=pts[i], b=pts[(i+1)%pts.length];
+       out.push({op:"draw_line",start:[a[0],a[1]],end:[b[0],b[1]]});
+       if(sk)sk.ents.push(out.length-1);
+     } break; }
+   case "revolve_cut": { const ax=c.axis||"z"; ensureAxis(ax); _fixRevolvePlane(ax);
+     out.push({op:"revolve_cut",axis:ax,...(c.angle!=null?{angle:c.angle}:{})}); addCut(c.name); pend=[]; break; }
+   case "revolve": { const ax=c.axis||"z"; ensureAxis(ax); ensurePart(); _fixRevolvePlane(ax);
+     out.push({op:"revolve",axis:ax,...(c.angle!=null?{angle:c.angle}:{})}); sawSolid=true; addBoss(c.name); pend=[]; break; }
+   case "cosmetic_helix": {
+     out.push({op:"helix_thread",diameter:c.diameter,pitch:c.pitch,length:c.length}); break; }
+   case "note": notes.push(c.text||""); break;
+   case "create_sketch": { ensurePart(); const cc=_clean(op,c); const fr=_faceRef(c.on,nameMap);
+     if(fr&&fr.__plane){delete cc.on;cc.plane=fr.__plane;lastFaceSign=planeSign[fr.__plane]||null;}
+     else if(fr){cc.on=fr;lastFaceSign=fr.facing[0];}
+     else {delete cc.on;lastFaceSign=null;}
+     if(cc.plane&&_PLANE_MAP[cc.plane])cc.plane=_PLANE_MAP[cc.plane][0];
+     sk={outIdx:out.length,family:cc.on?({x:"right",y:"top",z:"front"})[cc.on.facing[1]]:( {front:"front",top:"top",right:"right"}[cc.plane]||null ),ents:[]};
+     out.push(cc); pend=[]; break; }
+   case "create_plane": { const cc=_clean(op,c);
+     const m=_PLANE_MAP[cc.offset_from];
+     if(m){cc.offset_from=m[0];cc.distance=(cc.distance||0)*m[1];}
+     if(cc.name)planeSign[cc.name]=(cc.distance||0)>=0?"+":"-";
+     out.push(cc); break; }
+   case "draw_rectangle": { const cc=_clean(op,c);
+     if(c.at){ // at = الزاوية الدنيا بإحداثيات زاوية-الصفيحة → مركز محرّك
+       const cx=c.at.u+c.width/2-(plate?plate.w/2:0), cy=c.at.v+c.height/2-(plate?plate.h/2:0);
+       cc.center=[cx,cy];
+     }else if(cc.center)cc.center=off(cc.center[0],cc.center[1]);
+     out.push(cc); pend.push(cc); if(sk)sk.ents.push(out.length-1); break; }
+   case "draw_circle": { const cc=_clean(op,c);
+     if(c.at){cc.center=off(c.at.u||0,c.at.v||0);}
+     else if(cc.center)cc.center=off(cc.center[0],cc.center[1]);
+     out.push(cc); pend.push(cc); if(sk)sk.ents.push(out.length-1); break; }
+   case "hole": {
+     if(c.through===false&&c.depth!=null&&(c.type==null||c.type==="simple")){
+       // ثقب أعمى: hole المحرك ما فيها depth → sketch+circle+cut بعمق
+       const fr2=_faceRef(c.on,nameMap);
+       const rawC=(c.at==null||c.at==="center");
+       const poss=rawC?_atList(c.at):offAt(_atList(c.at));
+       for(const [px,py] of poss){
+         out.push(fr2&&!fr2.__plane?{op:"create_sketch",on:fr2}:{op:"create_sketch",plane:"front"});
+         out.push({op:"draw_circle",center:[px,py],diameter:c.diameter});
+         const cc2={op:"cut_extrude",through_all:false,depth:c.depth};
+         if(fr2&&fr2.facing&&fr2.facing[0]==="+")cc2.reverse=true;
+         out.push(cc2); addCut(c.name);
+       }
+       break;
+     }
+     const cc=_clean(op,c);
+     const rawCtr=(c.at==null||c.at==="center");
+     cc.at=rawCtr?_atList(c.at):offAt(_atList(c.at));
+     const fr=_faceRef(c.on,nameMap); if(fr&&!fr.__plane)cc.on=fr; else delete cc.on;
+     out.push(cc);
+     const perPos=(c.type==="counterbore"||c.type==="countersink")?2:1;
+     addCut(c.name, perPos*cc.at.length); break; }
+   case "circular_pattern": {
+     const ax=c.axis||"z";
+     out.push({op:"circular_pattern",features:[featName(c.of_feature)],axis:ax,count:c.count,
+               ...(c.total_angle!=null?{total_angle:c.total_angle}:{}),
+               ...(c.equal_spacing!=null?{equal_spacing:c.equal_spacing}:{})});
+     break; }
+   case "linear_pattern": {
+     const lp={op:"linear_pattern",features:[featName(c.of_feature)],
+               direction:_dir(c.direction)||"x",spacing:c.dx!=null?c.dx:c.spacing,count:c.nx!=null?c.nx:c.count};
+     if(c.ny!=null&&c.ny>1)lp.direction2={direction:"y",spacing:c.dy,count:c.ny};
+     out.push(lp); break; }
+   case "chamfer": { const cc=_clean(op,c); cc.edges=_edgesClean(c.edges); out.push(cc); break; }
+   case "fillet": { const cc=_clean(op,c); cc.edges=_edgesClean(c.edges); out.push(cc); break; }
+   case "cut_extrude": { flushCutInflate(); const cc=_clean(op,c); if(lastFaceSign==="+"&&cc.reverse==null)cc.reverse=true; out.push(cc); addCut(c.name); pend=[]; break; }
+   case "extrude": { out.push(_clean(op,c)); sawSolid=true; addBoss(c.name); pend=[]; break; }
+   case "internal_ring_gear": { sawPart=true;
+     const cc=_clean(op,c);
+     if(cc.rim_outer_diameter==null&&c.outer_diameter!=null)cc.rim_outer_diameter=c.outer_diameter;
+     out.push(cc); sawSolid=true; bossN++; plate=null; break; }
+   case "sprocket_iso": { sawPart=true;
+     const cc=_clean(op,c);
+     if(cc.chain==null){ const p=c.chain_pitch||12.7;
+       cc.chain = p<=9.6?"06B" : p<=12.8?"08B" : p<=16?"10B" : p<=19.1?"12B" : "16B"; }
+     out.push(cc); sawSolid=true; bossN++; plate=null; break; }
+   case "involute_spur_gear": { sawPart=true; // الماكرو يفتح مستنده المسمّى بنفسه
+     out.push(_clean(op,c)); sawSolid=true; bossN++; plate=null; break; }
+   case "insert_component": { const cc=_clean(op,c);
+     if(cc.at&&!Array.isArray(cc.at))cc.at=[cc.at.x||0,cc.at.y||0,cc.at.z||0];
+     if(cc.part)cc.part=String(cc.part).replace(/\.SLDPRT$/i,"");
+     { const stem=String(cc.part||"comp");
+       swTranslate._ic=swTranslate._ic||{}; swTranslate._ic[stem]=(swTranslate._ic[stem]||0)+1;
+       comps.push(c.name||stem+"_"+swTranslate._ic[stem]); } // اسم النسخة بالتوأم
+     out.push(cc); break; }
+   case "mate": { const cc=_clean(op,c);
+     if(cc.a==null&&comps.length)cc.a={component:comps[0],facing:"+z"};
+     if(cc.b==null&&comps.length)cc.b={component:comps[comps.length>1?1:0],facing:"+z"};
+     out.push(cc); break; }
+   default: out.push(_clean(op,c));
+  }
+ }
+ return {file:{schema_version:"0.5",commands:out}, notes};
+}
+
+const BI18N={
+ ar:{send:"أرسل للسوليدوركس",checking:"جارٍ فحص الاتصال بالمحرّك…",
+   on:b=>`✓ متصل بمحرّك صنايعي — الواجهة الخلفية: ${b}`,
+   off:BRIDGE_SAME_ORIGIN
+     ?'المحرّك غير شغّال. شغّله من PowerShell: <code>swpilot bridge --backend solidworks</code> ثم اضغط الزر.'
+     :'للإرسال للسوليدوركس: شغّل من PowerShell <code>swpilot bridge --backend solidworks</code> ثم افتح <code>http://127.0.0.1:8765</code> بالمتصفح (بدل فتح الملف مباشرة).',
+   mTitle:"تأكيد الإرسال للسوليدوركس",
+   mSub:n=>`راجع الأوامر (${n}) اللي رح تتنفّذ. ما بينفّذ إشي إلا بعد تأكيدك.`,
+   confirm:"✓ أكّد ونفّذ",cancel:"إلغاء",close:"إغلاق",
+   sending:"جارٍ الإرسال…",executing:"جارٍ التنفيذ بالسوليدوركس…",
+   okRun:b=>`🎉 تم التنفيذ بنجاح على الواجهة (${b})! افتح السوليدوركس وشوف القطعة.`,
+   okMock:"✓ تم التنفيذ على الواجهة التجريبية (mock) — للتجربة على السوليدوركس شغّل الجسر بـ --backend solidworks",
+   errValid:"❌ الأوامر مرفوضة من المحرّك:",
+   errConn:"❌ انقطع الاتصال بالمحرّك — تأكد إنه <code>swpilot bridge</code> لسا شغّال.",
+   errToken:"⏱ انتهت صلاحية التأكيد — أعد الإرسال من جديد.",
+   errRun:"❌ فشل التنفيذ:"},
+ en:{send:"Send to SolidWorks",checking:"Checking engine connection…",
+   on:b=>`✓ Connected to Sanay3i engine — backend: ${b}`,
+   off:BRIDGE_SAME_ORIGIN
+     ?'Engine not running. Start it in PowerShell: <code>swpilot bridge --backend solidworks</code> then click the button.'
+     :'To send to SolidWorks: run <code>swpilot bridge --backend solidworks</code> in PowerShell, then open <code>http://127.0.0.1:8765</code> in your browser (instead of opening the file directly).',
+   mTitle:"Confirm — send to SolidWorks",
+   mSub:n=>`Review the ${n} command(s) below. Nothing executes until you confirm.`,
+   confirm:"✓ Confirm & run",cancel:"Cancel",close:"Close",
+   sending:"Sending…",executing:"Executing in SolidWorks…",
+   okRun:b=>`🎉 Executed successfully on the ${b} backend! Open SolidWorks to see the part.`,
+   okMock:"✓ Executed on the mock backend — to drive SolidWorks, start the bridge with --backend solidworks",
+   errValid:"❌ Commands rejected by the engine:",
+   errConn:"❌ Lost connection to the engine — make sure <code>swpilot bridge</code> is still running.",
+   errToken:"⏱ Confirmation expired — send again.",
+   errRun:"❌ Execution failed:"}
+};
+const BT=()=>BI18N[lang]||BI18N.ar;
+
+async function bridgeHealth(){
+ const st=$("bridgeStatus");
+ try{
+   const r=await fetch(BRIDGE_BASE+"/v1/health",{signal:AbortSignal.timeout(2500)});
+   if(!r.ok)throw 0;
+   bridgeInfo=await r.json(); bridgeUp=true;
+   st.className="bridgestatus ok"; st.innerHTML=BT().on(bridgeInfo.backend||"?");
+   $("sendBtn").disabled=false;
+ }catch(e){
+   bridgeUp=false; bridgeInfo=null;
+   st.className="bridgestatus off"; st.innerHTML=BT().off;
+   $("sendBtn").disabled=false; /* stays clickable: clicking re-checks + explains */
+ }
+}
+
+function bmodalShow(){$("bModal").style.display="flex";}
+function bmodalHide(){$("bModal").style.display="none";$("bmResult").style.display="none";
+ $("bmCmds").style.display="block";_pendingToken=null;
+ $("bmConfirm").style.display="";$("bmConfirm").disabled=false;$("bmCancel").textContent=BT().cancel;}
+
+async function bridgeSend(){
+ // Re-check health first (cheap; covers "user just started the bridge")
+ await bridgeHealth();
+ const T=BT();
+ if(!bridgeUp){ // show modal in "how to start" mode
+   $("bmTitle").textContent=T.mTitle;
+   $("bmSub").innerHTML=T.off;
+   $("bmCmds").style.display="none";
+   $("bmResult").style.display="none";
+   $("bmConfirm").style.display="none";
+   $("bmCancel").textContent=T.close;
+   bmodalShow(); return;
+ }
+ // 1) PREVIEW: POST the CommandFile the catalog already generates
+ $("bmTitle").textContent=T.mTitle;
+ $("bmSub").textContent=T.sending;
+ $("bmCmds").style.display="block"; $("bmCmds").innerHTML="…";
+ $("bmResult").style.display="none";
+ $("bmConfirm").style.display=""; $("bmConfirm").disabled=true;
+ $("bmCancel").textContent=T.cancel;
+ bmodalShow();
+ let prev;
+ const tr=swTranslate(cur.json(vals));
+ try{
+   const r=await fetch(BRIDGE_BASE+"/v1/commandfile",{method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify(tr.file),signal:AbortSignal.timeout(8000)});
+   const body=await r.json().catch(()=>({}));
+   if(r.status===422){ // engine validation rejected it — show its exact message
+     $("bmCmds").style.display="none";
+     $("bmResult").className="bmodal-result err";
+     $("bmResult").innerHTML=T.errValid+"<br><code style='font-size:11px'>"+(body.error||"?")+"</code>";
+     $("bmResult").style.display="block";
+     $("bmConfirm").style.display="none";$("bmCancel").textContent=T.close;return;
+   }
+   if(!r.ok)throw 0;
+   prev=body;
+ }catch(e){
+   $("bmCmds").style.display="none";
+   $("bmResult").className="bmodal-result err";
+   $("bmResult").innerHTML=T.errConn;$("bmResult").style.display="block";
+   $("bmConfirm").style.display="none";$("bmCancel").textContent=T.close;return;
+ }
+ // Render the engine's parsed preview (what will actually run)
+ _pendingToken=prev.token;
+ $("bmSub").textContent=T.mSub(prev.commands.length);
+ let cmdsHtml=prev.commands.map(c=>{
+   const ps=Object.entries(c.params||{}).filter(([k,v])=>v!=null)
+     .map(([k,v])=>`${k}=${typeof v==="number"?+v.toFixed(2):JSON.stringify(v)}`).join(" · ");
+   return `<div><span class="op">${c.op}</span> <span class="pv">${ps}</span></div>`;
+ }).join("");
+ if(tr.notes.length){
+   cmdsHtml+=`<div style="margin-top:8px;color:var(--dim)">${lang==="ar"?"📝 ملاحظات (للقراءة فقط):":"📝 Notes (informational):"} ${tr.notes.map(n=>`<i>${n}</i>`).join(" · ")}</div>`;
+ }
+ $("bmCmds").innerHTML=cmdsHtml;
+ $("bmConfirm").disabled=false;
+}
+
+async function bridgeConfirm(){
+ const T=BT();
+ if(!_pendingToken)return;
+ $("bmConfirm").disabled=true;$("bmSub").textContent=T.executing;
+ try{
+   const r=await fetch(BRIDGE_BASE+"/v1/execute",{method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({token:_pendingToken}),signal:AbortSignal.timeout(120000)});
+   const body=await r.json().catch(()=>({}));
+   _pendingToken=null;
+   $("bmCmds").style.display="none";
+   if(r.status===404){ // expired / used token
+     $("bmResult").className="bmodal-result err";
+     $("bmResult").innerHTML=T.errToken;$("bmResult").style.display="block";
+     $("bmConfirm").style.display="none";$("bmCancel").textContent=T.close;return;
+   }
+   if(!r.ok)throw 0;
+   const rep=body.report||{};
+   if(rep.success){
+     $("bmResult").className="bmodal-result ok";
+     $("bmResult").textContent=(rep.backend==="solidworks")?T.okRun(rep.backend):T.okMock;
+   }else{
+     const firstErr=(rep.results||[]).find(x=>x.status==="error");
+     $("bmResult").className="bmodal-result err";
+     $("bmResult").innerHTML=T.errRun+"<br><code style='font-size:11px'>"+
+       ((firstErr&&(firstErr.error||firstErr.message))||"?")+"</code>";
+   }
+   $("bmResult").style.display="block";
+   $("bmConfirm").style.display="none";$("bmCancel").textContent=T.close;
+ }catch(e){
+   $("bmCmds").style.display="none";
+   $("bmResult").className="bmodal-result err";
+   $("bmResult").innerHTML=T.errConn;$("bmResult").style.display="block";
+   $("bmConfirm").style.display="none";$("bmCancel").textContent=T.close;
+ }
+}
+
+$("sendBtn").onclick=bridgeSend;
+$("bmConfirm").onclick=bridgeConfirm;
+$("bmCancel").onclick=bmodalHide;
+$("bModal").onclick=e=>{if(e.target.id==="bModal")bmodalHide();};
+
+cur=allParts()[0];
+if(typeof loadFromHash==="function"&&loadFromHash()){/* shared link */}
+setLang("ar");
+</script>
+</body>
+</html>

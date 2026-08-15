@@ -1495,6 +1495,54 @@ def revolve_calls(
     ]
 
 
+def revolve_cut_calls(
+    axis_feature: str, angle_deg: float, reverse: bool, name: str
+) -> list[CallSpec]:
+    """Select a reference axis, then FeatureRevolve2 with IsCut=True.
+
+    Identical documented 20-parameter FeatureRevolve2 signature as the boss
+    revolve; only the IsCut flag (position 4) flips, so a revolved profile is
+    REMOVED from the material — e.g. a pulley V-groove.
+    """
+    return [
+        *_end_sketch_edits(),
+        CallSpec(
+            target="Model.Extension",
+            method="SelectByID2",
+            args=(axis_feature, "AXIS", 0.0, 0.0, 0.0, True, 0, None, 0),
+            check="truthy",
+            note=f"select '{axis_feature}' as the revolve-cut axis",
+        ),
+        CallSpec(
+            target="Model.FeatureManager",
+            method="FeatureRevolve2",
+            args=(
+                True,   # SingleDir
+                True,   # IsSolid
+                False,  # IsThin
+                True,   # IsCut  ← the one flipped flag vs revolve_calls
+                reverse,  # ReverseDir
+                False,  # BothDirectionUpToSameEntity
+                SW_REVOLVE_BLIND,  # Dir1Type
+                SW_REVOLVE_BLIND,  # Dir2Type
+                math.radians(angle_deg),  # Dir1Angle
+                0.0,    # Dir2Angle
+                False, False,  # OffsetReverse1/2
+                0.0, 0.0,  # OffsetDistance1/2
+                0,      # ThinType
+                0.0, 0.0,  # ThinThickness1/2
+                True,   # Merge
+                False,  # UseFeatScope
+                True,   # UseAutoSelect
+            ),
+            check="non_null",
+            remember=True,
+            note=f"revolve-cut {angle_deg}° about {axis_feature}",
+        ),
+        rename_last_feature(name),
+    ]
+
+
 def helix_thread_calls(
     diameter_mm: float,
     pitch_mm: float,

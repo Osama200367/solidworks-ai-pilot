@@ -171,3 +171,83 @@ class TestHelix:
     def test_pitch_must_be_positive(self) -> None:
         with pytest.raises(ValueError, match="pitch"):
             c.helix_spec(10, 0, 20)
+
+
+# ---------------------------------------------------------------------------
+# revolve_cut (v1.2 catalog-parity): a revolved profile REMOVES material
+# ---------------------------------------------------------------------------
+
+
+def _pulley_vgroove_cmds() -> dict:
+    return {
+        "schema_version": "0.5",
+        "commands": [
+            {"op": "new_part", "name": "pulley"},
+            {"op": "create_sketch", "plane": "front"},
+            {"op": "draw_circle", "diameter": 60},
+            {"op": "extrude", "depth": 20},
+            {"op": "create_axis", "axis": "y"},
+            {"op": "create_sketch", "plane": "right"},
+            {"op": "draw_line", "start": [26, 8], "end": [31, 10]},
+            {"op": "draw_line", "start": [31, 10], "end": [31, 14]},
+            {"op": "draw_line", "start": [31, 14], "end": [26, 12]},
+            {"op": "draw_line", "start": [26, 12], "end": [26, 8]},
+            {"op": "revolve_cut", "axis": "y"},
+        ],
+    }
+
+
+def test_revolve_cut_executes_and_flips_iscut() -> None:
+    from swpilot.backends.mock.simulator import MockBackend
+    from swpilot.commands.loader import expand_commands, parse_command_data
+    from swpilot.executor import execute
+
+    cf = parse_command_data(_pulley_vgroove_cmds())
+    expanded = expand_commands(list(cf.commands))
+    backend = MockBackend()
+    report = execute(expanded, backend)
+    assert report.success
+    rev = [c for c in backend.call_log if c.method == "FeatureRevolve2"]
+    assert len(rev) == 1
+    assert rev[0].args[3] is True  # IsCut — the single flipped flag vs revolve
+    assert "revolve-cut" in rev[0].note
+
+
+def test_revolve_cut_requires_existing_material() -> None:
+    import pytest as _pytest
+
+    from swpilot.commands.loader import CommandFileError, expand_commands, parse_command_data
+
+    cmds = {
+        "schema_version": "0.5",
+        "commands": [
+            {"op": "new_part"},
+            {"op": "create_axis", "axis": "y"},
+            {"op": "create_sketch", "plane": "right"},
+            {"op": "draw_line", "start": [10, 0], "end": [14, 0]},
+            {"op": "draw_line", "start": [14, 0], "end": [14, 4]},
+            {"op": "draw_line", "start": [14, 4], "end": [10, 4]},
+            {"op": "draw_line", "start": [10, 4], "end": [10, 0]},
+            {"op": "revolve_cut", "axis": "y"},
+        ],
+    }
+    cf = parse_command_data(cmds)
+    with _pytest.raises(CommandFileError, match="no solid material to cut"):
+        expand_commands(list(cf.commands))
+
+
+def test_revolve_cut_rejects_axis_crossing_profile() -> None:
+    import pytest as _pytest
+
+    from swpilot.commands.loader import CommandFileError, expand_commands, parse_command_data
+
+    cmds = _pulley_vgroove_cmds()
+    cmds["commands"][6:10] = [
+        {"op": "draw_line", "start": [-3, 8], "end": [3, 8]},
+        {"op": "draw_line", "start": [3, 8], "end": [3, 12]},
+        {"op": "draw_line", "start": [3, 12], "end": [-3, 12]},
+        {"op": "draw_line", "start": [-3, 12], "end": [-3, 8]},
+    ]
+    cf = parse_command_data(cmds)
+    with _pytest.raises(CommandFileError, match="crosses the revolve axis"):
+        expand_commands(list(cf.commands))

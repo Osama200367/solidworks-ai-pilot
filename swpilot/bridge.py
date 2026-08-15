@@ -38,6 +38,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import swpilot
@@ -78,6 +79,7 @@ class BridgeState:
     """Shared server state: the backend choice and pending confirmations."""
 
     backend: str = "mock"  # "mock" | "solidworks"
+    catalog_path: Path | None = None  # HTML served at GET / (same-origin UI)
     pending: dict[str, _Pending] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -237,6 +239,32 @@ class _Handler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if self.path in ("/", "/index.html"):
+            # Serve the Parts Studio catalog same-origin with the API, so the
+            # browser UI needs no CORS at all and file:// pitfalls disappear.
+            cat = self._state.catalog_path
+            if cat is None or not cat.is_file():
+                self._send_json(
+                    404,
+                    {
+                        "error": "catalog not configured",
+                        "hint": "start with: swpilot bridge "
+                        "--catalog path/to/Sanay3i_Parts_Studio.html",
+                    },
+                )
+                return
+            try:
+                body = cat.read_bytes()
+            except OSError as exc:
+                self._send_json(500, {"error": f"catalog read failed: {exc}"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         self._send_json(404, {"error": "unknown endpoint"})
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib naming
@@ -320,13 +348,44 @@ class BridgeServer(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, port: int = 8765, backend: str = "mock") -> None:
-        self.bridge_state = BridgeState(backend=backend)
+    def __init__(
+        self,
+        port: int = 8765,
+        backend: str = "mock",
+        catalog_path: Path | None = None,
+    ) -> None:
+        self.bridge_state = BridgeState(backend=backend, catalog_path=catalog_path)
         super().__init__(("127.0.0.1", port), _Handler)
 
 
-def create_server(port: int = 8765, backend: str = "mock") -> BridgeServer:
-    """Build the localhost-only bridge server (port 0 = ephemeral, for tests)."""
+def _autodetect_catalog() -> Path | None:
+    """Find the Parts Studio catalog HTML near the package/CWD, if present."""
+    candidates: list[Path] = []
+    for root in (Path.cwd(), Path(__file__).resolve().parent.parent):
+        candidates.extend(sorted(root.glob("Sanay3i_Parts_Studio*.html")))
+        candidates.extend(sorted(root.glob("*Parts_Studio*.html")))
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def create_server(
+    port: int = 8765,
+    backend: str = "mock",
+    catalog: Path | None = None,
+) -> BridgeServer:
+    """Build the localhost-only bridge server (port 0 = ephemeral, for tests).
+
+    ``catalog`` — path to the Parts Studio HTML served at ``GET /``. When
+    omitted, the repo root / CWD is searched for ``Sanay3i_Parts_Studio*.html``.
+    """
     if backend not in ("mock", "solidworks"):
         raise BridgeError(f"unknown backend {backend!r}")
-    return BridgeServer(port=port, backend=backend)
+    if catalog is not None:
+        catalog = Path(catalog)
+        if not catalog.is_file():
+            raise BridgeError(f"catalog file not found: {catalog}")
+    else:
+        catalog = _autodetect_catalog()
+    return BridgeServer(port=port, backend=backend, catalog_path=catalog)

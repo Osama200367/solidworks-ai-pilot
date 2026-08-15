@@ -505,6 +505,21 @@ class Revolve(_Cmd):
     reverse: bool = False
 
 
+class RevolveCut(_Cmd):
+    """Revolve-CUT the active sketch profile about a world axis (through origin).
+
+    Same geometry rules as ``revolve`` (axis must lie in the sketch plane,
+    profile must stay on one side of the axis), but the swept solid is
+    REMOVED from existing material instead of added — e.g. a V-groove on a
+    pulley. Requires a solid to already exist. Consumes the active sketch.
+    """
+
+    op: Literal["revolve_cut"] = "revolve_cut"
+    axis: AxisName
+    angle: Annotated[float, Field(gt=0, le=360, allow_inf_nan=False)] = 360.0
+    reverse: bool = False
+
+
 class GearMeta(_Cmd):
     """Internal: tag the active part with involute-gear invariants.
 
@@ -892,6 +907,7 @@ PrimitiveCommand = Annotated[
     | DrawArc
     | DrawLine
     | Revolve
+    | RevolveCut
     | HelixThread
     | GearMeta,
     Field(discriminator="op"),
@@ -939,6 +955,7 @@ Command = Annotated[
     | DrawArc
     | DrawLine
     | Revolve
+    | RevolveCut
     | GearMeta
     | CreatePlate
     | AddCornerHoles
@@ -983,6 +1000,7 @@ PRIMITIVE_OPS = frozenset(
         "draw_arc",
         "draw_line",
         "revolve",
+        "revolve_cut",
         "gear_meta",
         "helix_thread",
     }

@@ -184,6 +184,9 @@ class Backend(ABC):
     def revolve(self, axis_feature: str, angle: float, reverse: bool, name: str) -> None: ...
 
     @abstractmethod
+    def revolve_cut(self, axis_feature: str, angle: float, reverse: bool, name: str) -> None: ...
+
+    @abstractmethod
     def helix_thread(
         self,
         diameter: float,

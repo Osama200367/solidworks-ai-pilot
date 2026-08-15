@@ -48,6 +48,8 @@ CATALOG: tuple[CadFeature, ...] = (
     CadFeature("extrude", "extrude", "بثق", (r"\bextrude\b", r"\bبثق\b")),
     CadFeature("revolve", "revolve (solid of revolution)", "تدوير حول محور",
                (r"\brevolve\b", r"\blathe\b", r"مجسم دوراني", r"تدوير حول")),
+    CadFeature("revolve_cut", "revolved cut (e.g. V-groove)", "قصّ دوراني (مجرى V)",
+               (r"\brevolve[d]?[ _-]?cut\b", r"\bv[- ]?groove\b", r"قص دوراني", r"مجرى")),
     CadFeature("hole", "holes (incl. counterbore/countersink)", "ثقوب",
                (r"\bhole\b", r"\bثقب\b", r"\bثقوب\b", r"تجويف")),
     CadFeature("fillet", "fillet", "تدوير الحواف",

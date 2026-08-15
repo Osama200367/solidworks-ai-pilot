@@ -467,6 +467,10 @@ class SolidWorksBackend(Backend):
         self._require_model("revolve")
         self._execute_all(calls.revolve_calls(axis_feature, angle, reverse, name))
 
+    def revolve_cut(self, axis_feature: str, angle: float, reverse: bool, name: str) -> None:
+        self._require_model("revolve_cut")
+        self._execute_all(calls.revolve_cut_calls(axis_feature, angle, reverse, name))
+
     def helix_thread(
         self,
         diameter: float,

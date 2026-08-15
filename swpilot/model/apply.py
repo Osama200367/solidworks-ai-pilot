@@ -50,6 +50,7 @@ from swpilot.commands.schema import (
     NewAssembly,
     NewPart,
     Revolve,
+    RevolveCut,
     SaveAssembly,
     SaveDrawing,
     SavePart,
@@ -102,6 +103,7 @@ PrimitiveT = (
     | DrawArc
     | DrawLine
     | Revolve
+    | RevolveCut
     | HelixThread
     | GearMeta
 )
@@ -334,6 +336,10 @@ def apply_to_session(session: SessionTracker, cmd: PrimitiveT) -> ApplyResult:
     elif isinstance(cmd, Revolve):
         tracker = session.active_part("revolve")
         result.feature_name = tracker.revolve(cmd.axis, cmd.angle, cmd.reverse).name
+        result.axis_feature = AXIS_FEATURE_NAMES[cmd.axis]
+    elif isinstance(cmd, RevolveCut):
+        tracker = session.active_part("revolve_cut")
+        result.feature_name = tracker.revolve_cut(cmd.axis, cmd.angle, cmd.reverse).name
         result.axis_feature = AXIS_FEATURE_NAMES[cmd.axis]
     elif isinstance(cmd, HelixThread):
         result.feature_name = (

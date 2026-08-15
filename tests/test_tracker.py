@@ -111,19 +111,22 @@ class TestCutContainment:
         with pytest.raises(ModelError, match="miss the part entirely"):
             tr.cut_extrude(True, None, False, None)
 
-    def test_hole_crossing_plate_edge_rejected(self, tr: ModelTracker) -> None:
+    def test_hole_crossing_plate_edge_warns(self, tr: ModelTracker) -> None:
+        # v1.2: edge-crossing cuts (flats, channels, rim windows) are standard
+        # SolidWorks operations — the twin warns instead of rejecting, and
+        # delegates exact-tangency rejection to Windows verification.
         make_plate(tr)
         tr.create_sketch("front")
         tr.draw_circle((50, 0), 8)
-        with pytest.raises(ModelError, match="not strictly inside"):
-            tr.cut_extrude(True, None, False, None)
+        tr.cut_extrude(True, None, False, None)
+        assert any("crosses or touches a material edge" in w for w in tr.pop_warnings())
 
-    def test_hole_tangent_to_edge_rejected(self, tr: ModelTracker) -> None:
+    def test_hole_tangent_to_edge_warns(self, tr: ModelTracker) -> None:
         make_plate(tr)
         tr.create_sketch("front")
         tr.draw_circle((46, 0), 8)  # tangent to x=50 edge: zero-thickness
-        with pytest.raises(ModelError, match="not strictly inside"):
-            tr.cut_extrude(True, None, False, None)
+        tr.cut_extrude(True, None, False, None)
+        assert any("SolidWorks will reject" in w for w in tr.pop_warnings())
 
     def test_seam_spanning_cut_warns_instead_of_failing(self, tr: ModelTracker) -> None:
         make_plate(tr, 100, 50, 5)

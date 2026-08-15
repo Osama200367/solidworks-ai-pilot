@@ -623,6 +623,77 @@ class ModelTracker:
         self.features.append(feature)
         return feature
 
+    def revolve_cut(self, axis: AxisName, angle: float, reverse: bool) -> FeatureRec:
+        """Revolve-CUT: remove the swept profile from existing material.
+
+        Same axis-in-plane and one-side-of-axis rules as ``revolve``; also
+        requires a solid to already exist (there must be material to cut).
+        The twin bounds the removal as the swept annulus and delegates exact
+        cut containment to Windows verification, mirroring curved cuts.
+        """
+        self._require_part("revolve_cut")
+        if not self.has_solid:
+            raise ModelError(
+                "revolve_cut: there is no solid material to cut; extrude a base feature first"
+            )
+        sketch = self._require_active_sketch("revolve_cut")
+        frame = sketch.frame
+        axis_vec = AXIS_VECTORS[axis]
+        if abs(abs(dot(axis_vec, frame.normal))) > EPS:
+            raise ModelError(
+                f"revolve_cut: the revolve axis {axis!r} must lie IN the sketch plane "
+                f"(sketch normal is {NORMAL_AXIS[frame.family]!r}); pick an in-plane axis"
+            )
+        au, av = dot(axis_vec, frame.u), dot(axis_vec, frame.v)
+        if sketch.is_curved:
+            sketch = self._consume_curved_sketch("revolve_cut")
+            pts = cv.segments_points(sketch.curve_loop)
+        else:
+            sketch = self._consume_sketch("revolve_cut")
+            pts = _prismatic_profile_points(sketch.entities)
+        off = frame.offset
+        radials = [(-av) * u + au * v for (u, v) in pts]
+        axials = [au * u + av * v for (u, v) in pts]
+        if abs(off) <= EPS and min(radials) < -EPS and max(radials) > EPS:
+            raise ModelError(
+                "revolve_cut: the profile crosses the revolve axis; a revolved cut "
+                "needs the whole profile on one side of the axis"
+            )
+        import math as _math
+
+        rmax = max(_math.hypot(r, off) for r in radials)
+        feature = FeatureRec(
+            name=self._next_name("cut"),
+            kind="cut",
+            sketch=sketch,
+            depth_mm=None,
+            reverse=reverse,
+            curved=True,
+            curve_radius=rmax,
+            curve_frame=frame,
+            curve_depth=max(axials) - min(axials),
+            curve_reverse=reverse,
+            curve_bbox=cv.segments_bbox([cv.SplineSeg(points=tuple(pts))]),
+            curve_revolve_axis=axis,
+            curve_axial=(min(axials), max(axials)),
+        )
+        self._require_axis("revolve_cut", axis)
+        feature.detail["revolve_axis"] = axis
+        feature.detail["revolve_angle"] = angle
+        feature.detail["max_radius"] = rmax
+        sketch.consumed_by = feature.name
+        self._warn(
+            "revolve_cut: the twin bounds the removal as the swept annulus; exact "
+            "cut containment inside the material is Windows-verified"
+        )
+        if angle < 360.0 - EPS:
+            self._warn(
+                f"revolve_cut: partial revolve ({angle}°); the twin bounds it as the "
+                "full annulus (exact partial sweep is Windows-verified)"
+            )
+        self.features.append(feature)
+        return feature
+
     def cut_extrude(
         self,
         through_all: bool,
@@ -721,11 +792,14 @@ class ModelTracker:
                     "would miss the part entirely"
                 )
             if len(touching) == 1:
-                raise ModelError(
+                self._warn(
                     f"cut_extrude: contour {_describe(shape)} in {sketch.name} is not "
-                    "strictly inside the existing material footprint; the cut would "
-                    "cross or touch a material edge (zero-thickness geometry)"
+                    "strictly inside the existing material footprint and crosses or "
+                    "touches a material edge; edge-crossing cuts (flats, channels, "
+                    "rim windows) are standard, but EXACT tangency is zero-thickness "
+                    "and SolidWorks will reject it (Windows-verified)"
                 )
+                continue
             self._warn(
                 f"cut_extrude: contour {_describe(shape)} in {sketch.name} spans "
                 "several material footprints and is strictly inside none; if it stays "

@@ -50,6 +50,7 @@ from swpilot.commands.schema import (
     NewAssembly,
     NewPart,
     Revolve,
+    RevolveCut,
     SaveAssembly,
     SaveDrawing,
     SavePart,
@@ -245,6 +246,9 @@ def _dispatch(backend: Backend, ec: ExpandedCommand, res: ApplyResult) -> None:
     elif isinstance(c, Revolve):
         assert res.feature_name is not None and res.axis_feature is not None
         backend.revolve(res.axis_feature, c.angle, c.reverse, res.feature_name)
+    elif isinstance(c, RevolveCut):
+        assert res.feature_name is not None and res.axis_feature is not None
+        backend.revolve_cut(res.axis_feature, c.angle, c.reverse, res.feature_name)
     elif isinstance(c, HelixThread):
         assert res.feature_name is not None
         rev = c.length / c.pitch

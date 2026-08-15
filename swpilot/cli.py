@@ -591,17 +591,22 @@ def bridge(
     backend: Annotated[
         BackendChoice, typer.Option(help="Execution backend for confirmed runs")
     ] = BackendChoice.mock,
+    catalog: Annotated[
+        Path | None,
+        typer.Option(help="Parts Studio HTML to serve at / (auto-detected if omitted)"),
+    ] = None,
 ) -> None:
     """Serve the local catalog↔engine bridge (localhost only).
 
-    The Parts Studio catalog POSTs a CommandFile to /v1/commandfile, shows
-    the returned command-list preview to the user, and only executes after
-    the user confirms via /v1/execute with the one-time token — the same
-    validate → preview → confirm → execute pipeline the CLI enforces.
+    Serves the Parts Studio catalog at / (same-origin with the API), which
+    POSTs a CommandFile to /v1/commandfile, shows the returned command-list
+    preview to the user, and only executes after the user confirms via
+    /v1/execute with the one-time token — the same validate → preview →
+    confirm → execute pipeline the CLI enforces.
     """
     from swpilot.bridge import create_server
 
-    server = create_server(port=port, backend=backend.value)
+    server = create_server(port=port, backend=backend.value, catalog=catalog)
     host, actual_port = server.server_address[:2]
     typer.secho(
         f"Sanay3i bridge listening on http://{host!s}:{actual_port} "
@@ -609,6 +614,19 @@ def bridge(
         fg=typer.colors.GREEN,
         err=True,
     )
+    if server.bridge_state.catalog_path is not None:
+        typer.secho(
+            f"→ open the catalog:  http://{host!s}:{actual_port}/",
+            fg=typer.colors.CYAN,
+            err=True,
+        )
+    else:
+        typer.secho(
+            "(no catalog HTML found — API-only mode; "
+            "pass --catalog path/to/Sanay3i_Parts_Studio.html to serve the UI)",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

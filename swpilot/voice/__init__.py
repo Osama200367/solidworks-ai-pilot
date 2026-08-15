@@ -1,3 +1,11 @@
+# ============================================================
+# Sanay3i (صنايعي) — AI-Powered Mechanical CAD Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Product: Sanay3i (صنايعي)  |  Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """Voice layer (v1.1): speak a part/assembly description instead of typing.
 
 A thin capture + transcription front-end that funnels into the *exact* v1.0

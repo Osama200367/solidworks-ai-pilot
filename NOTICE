@@ -1,0 +1,32 @@
+Sanay3i (صنايعي) — AI-Powered Mechanical CAD Automation
+NOTICE — DECLARATION OF AUTHORSHIP
+
+Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+
+Eng. Osama Isa Ali Alassar (المهندس أسامة عيسى علي العصار) is the sole
+author, designer, and owner of the Sanay3i (صنايعي) product and of all of
+its components, including but not limited to:
+
+  - the automation engine (command schema, macro expansion, digital twin,
+    mock and COM backends, executor, and CLI);
+  - the natural-language layer (prompt bundles, vocabulary generation,
+    extraction, and the validate/repair loop);
+  - the voice layer (capture, transcription, and dialect normalization);
+  - the Parts Studio catalog;
+  - all source code, designs, drawings, schemas, examples, tests, and
+    documentation in this repository.
+
+The dated, signed commit history preserved in this repository is retained
+as evidence of authorship and priority of the above works.
+
+This project is proprietary. See the LICENSE file at the repository root
+for the terms governing access and use. Access for review, evaluation, or
+testing grants no ownership, license, or right to use, commercialize, or
+redistribute any part of this project.
+
+Third-party trademarks referenced by this project — including SOLIDWORKS,
+a trademark of Dassault Systemes — belong to their respective owners.
+Sanay3i (صنايعي) is an independent work, not affiliated with or endorsed
+by them.
+
+Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.

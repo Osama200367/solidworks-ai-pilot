@@ -1,3 +1,11 @@
+# ============================================================
+# Sanay3i (صنايعي) — AI-Powered Mechanical CAD Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Product: Sanay3i (صنايعي)  |  Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """Executor: tracker-validated dispatch of expanded commands to a backend.
 
 For every command, in order: the shared :class:`ModelTracker` validates

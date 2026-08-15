@@ -1,3 +1,11 @@
+# ============================================================
+# Sanay3i (صنايعي) — AI-Powered Mechanical CAD Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Product: Sanay3i (صنايعي)  |  Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """Speech-to-text: an optional Whisper-compatible client + a thin mic wrapper.
 
 Transcription mirrors v1.0's provider-agnostic philosophy. API mode POSTs the
@@ -24,7 +32,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_STT_BASE_URL = "https://api.openai.com/v1"
@@ -47,7 +55,8 @@ class VoiceCaptureError(RuntimeError):
 class STTConfig:
     base_url: str
     model: str
-    api_key: str
+    # repr=False: the key must never leak into logs/tracebacks via repr().
+    api_key: str = field(repr=False)
     timeout: float = 120.0
 
     @classmethod

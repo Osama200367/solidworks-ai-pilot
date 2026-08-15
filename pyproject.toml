@@ -4,9 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swpilot"
-version = "1.1.0"
-description = "SW-Pilot: JSON-driven automation layer for SolidWorks with a CI-friendly mock backend"
+version = "1.2.0"
+description = "Sanay3i (صنايعي): AI-powered mechanical CAD automation — describe a part in Arabic or English, and it's drawn"
+keywords = ["sanay3i", "cad", "automation", "solidworks", "ai", "arabic", "voice"]
 readme = "README.md"
+authors = [{ name = "Eng. Osama Isa Ali Alassar" }]
+license = { file = "LICENSE" }
+classifiers = ["License :: Other/Proprietary License"]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.5",

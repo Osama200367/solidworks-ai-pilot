@@ -1,3 +1,11 @@
+# ============================================================
+# Sanay3i (صنايعي) — AI-Powered Mechanical CAD Automation
+# Copyright (c) 2026 Eng. Osama Isa Ali Alassar. All Rights Reserved.
+# Proprietary and confidential. Unauthorized copying, use, or
+# distribution of this file, via any medium, is strictly prohibited.
+# Product: Sanay3i (صنايعي)  |  Owner: Eng. Osama Isa Ali Alassar
+# ============================================================
+
 """Optional API mode: one OpenAI-compatible chat client.
 
 A single provider-agnostic client hitting the OpenAI ``/chat/completions``
@@ -19,7 +27,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
@@ -36,7 +44,8 @@ class LLMRequestError(RuntimeError):
 class LLMConfig:
     base_url: str
     model: str
-    api_key: str
+    # repr=False: the key must never leak into logs/tracebacks via repr().
+    api_key: str = field(repr=False)
     timeout: float = 60.0
 
     @classmethod

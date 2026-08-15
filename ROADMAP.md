@@ -116,7 +116,7 @@ expansion, simulation, execution, reporting — is identical for LLM-authored
 and hand-written files. Acceptance cases: the Arabic gear request above runs
 1/1 through the mock, plus an assembly request and a plain plate.
 
-### v1.1 — Voice layer ◀ current phase
+### v1.1 — Voice layer ✅ (merged)
 
 *Speak* a part/assembly description (Arabic or English) instead of typing it,
 onto the same pipeline. `swpilot/voice/` is a thin front-end — capture +
@@ -137,3 +137,28 @@ voice never bypasses validation. Microphone capture is import-guarded and
 optional (`swpilot[voice]`); real mic capture and STT accuracy are verified
 only on hardware, while CI covers the file-path, transcription-plumbing, and
 normalization paths with recorded fixtures.
+
+### v1.2 — Robust understanding + the catalog bridge ◀ current phase
+
+Two improvements, zero new engine ops. **Part 1 — robust natural
+language:** richer few-shots (compound requests, mixed Arabic/English,
+dialect phrasing, implicit standards like "standard M8 clearance hole"),
+plus **graceful out-of-scope handling**: a known-CAD-feature catalog
+(`swpilot/llm/features.py`) whose supported/coming-soon split is *computed*
+from the live Command union — never hand-maintained, so shipping a future
+op automatically flips its feature to supported (a CI drift test pins
+this). Unsupported asks (sweep, loft, shell, sheet metal, …) get a warm
+bilingual "coming soon إن شاء الله 🔜" message naming the feature and the
+closest supported alternative — never a crash, never a hallucinated
+command. Partial understanding rides a `"skipped"` envelope the llm layer
+strips before validation (schema untouched): the understood commands are
+shown together with what was left out, and building only part of a request
+always requires explicit confirmation. **Part 2 — the catalog bridge**
+(`swpilot/bridge.py`, stdlib-only): `swpilot bridge` serves 127.0.0.1 only
+with the same validate → preview → **confirm** → execute pipeline behind
+two endpoints — `POST /v1/commandfile` returns the parsed command-list
+preview and a single-use expiring token; nothing executes until
+`POST /v1/execute` presents it. Non-local origins rejected, bodies capped
+at 1 MiB, and validation is byte-for-byte the CLI's gate (path safety,
+`extra="forbid"`, resource bounds). Contract documented in
+`docs/BRIDGE.md`; the whole bridge is CI-tested against the mock.
